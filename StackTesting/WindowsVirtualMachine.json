@@ -22,39 +22,66 @@
         "description": "Globally unique DNS Name for the Public IP used to access the Virtual Machine."
       }
     },
+    "vmSize": {
+      "type": "string",
+      "defaultValue": "Standard_DS2_v2"
+    },
     "windowsOSVersion": {
       "type": "string",
-      "defaultValue": "2012-R2-Datacenter",
+      "defaultValue": "2016-Datacenter",
       "allowedValues": [
-        "2008-R2-SP1",
-        "2012-Datacenter",
-        "2012-R2-Datacenter"
+        "2016-Datacenter"
       ],
       "metadata": {
         "description": "The Windows version for the VM. This will pick a fully patched image of this given Windows version. Allowed values: 2008-R2-SP1, 2012-Datacenter, 2012-R2-Datacenter."
+      }
+    },
+    "instances": {
+      "type": "int",
+      "defaultValue": 2
+    },
+    "dataDiskSize": {
+      "type": "int",
+      "defaultValue": 255
+    },
+    "dataDiskCount": {
+      "type": "int",
+      "defaultValue": 4
+    },
+    "_artifactsLocation": {
+      "type": "string",
+      "metadata": {
+        "description": "Auto-generated container in staging storage account to receive post-build staging folder upload"
+      }
+    },
+    "_artifactsLocationSasToken": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Auto-generated token to access _artifactsLocation"
       }
     }
   },
   "variables": {
     "imagePublisher": "MicrosoftWindowsServer",
     "imageOffer": "WindowsServer",
-    "OSDiskName": "osdiskforwindowssimple",
-    "nicName": "myVMNic",
+    "OSDiskName": "osDisk",
+    "nicName": "testvm",
     "addressPrefix": "10.0.0.0/16",
     "subnetName": "Subnet",
     "subnetPrefix": "10.0.0.0/24",
     "vhdStorageType": "Standard_LRS",
-    "publicIPAddressName": "myPublicIP",
+    "publicIPAddressName": "TestVmIp",
     "publicIPAddressType": "Dynamic",
     "vhdStorageContainerName": "vhds",
-    "vmName": "MyWindowsVM",
-    "vmSize": "Standard_A2",
-    "virtualNetworkName": "MyVNET",
+    "vmName": "TestVm",
+    "virtualNetworkName": "TestVnet",
     "vnetId": "[resourceId('Microsoft.Network/virtualNetworks', variables('virtualNetworkName'))]",
     "subnetRef": "[concat(variables('vnetId'), '/subnets/', variables('subnetName'))]",
     "vhdStorageAccountName": "[concat('vhdstorage', uniqueString(resourceGroup().id))]",
     "diagnosticsStorageAccountName": "[variables('vhdStorageAccountName')]",
-    "wadmetricsresourceid": "[resourceId('Microsoft.Compute/virtualMachines', variables('vmName'))]"
+    "wadmetricsresourceid": "[resourceId('Microsoft.Compute/virtualMachines', variables('vmName'))]",
+    "DiskPrepTestArchiveFolder": "DSC",
+    "DiskPrepTestArchiveFileName": "DiskPrepTest.zip"
   },
   "resources": [
     {
@@ -73,7 +100,11 @@
     {
       "apiVersion": "2016-03-30",
       "type": "Microsoft.Network/publicIPAddresses",
-      "name": "[variables('publicIPAddressName')]",
+      "name": "[concat(variables('publicIPAddressName'),copyIndex())]",
+      "copy": {
+        "name": "publicIpLoop",
+        "count": "[parameters('instances')]"
+      },
       "location": "[resourceGroup().location]",
       "tags": {
         "displayName": "PublicIPAddress"
@@ -81,7 +112,7 @@
       "properties": {
         "publicIPAllocationMethod": "[variables('publicIPAddressType')]",
         "dnsSettings": {
-          "domainNameLabel": "[parameters('dnsNameForPublicIP')]"
+          "domainNameLabel": "[concat(parameters('dnsNameForPublicIP'),copyIndex())]"
         }
       }
     },
@@ -112,13 +143,17 @@
     {
       "apiVersion": "2016-03-30",
       "type": "Microsoft.Network/networkInterfaces",
-      "name": "[variables('nicName')]",
+      "name": "[concat(variables('nicName'), copyIndex())]",
+      "copy": {
+        "name": "nicLoop",
+        "count": "[parameters('instances')]"
+      },
       "location": "[resourceGroup().location]",
       "tags": {
-        "displayName": "NetworkInterface"
+        "displayName": "[concat('NetworkInterface',copyIndex())]"
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Network/publicIPAddresses/', variables('publicIPAddressName'))]",
+        "publicIpLoop",
         "[resourceId('Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'))]"
       ],
       "properties": {
@@ -128,7 +163,7 @@
             "properties": {
               "privateIPAllocationMethod": "Dynamic",
               "publicIPAddress": {
-                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPAddressName'))]"
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', concat(variables('publicIPAddressName'), copyIndex()))]"
               },
               "subnet": {
                 "id": "[variables('subnetRef')]"
@@ -141,21 +176,25 @@
     {
       "apiVersion": "2015-06-15",
       "type": "Microsoft.Compute/virtualMachines",
-      "name": "[variables('vmName')]",
+      "name": "[concat(variables('vmName'),copyIndex())]",
+      "copy": {
+        "name": "vmCopy",
+        "count": "[parameters('instances')]"
+      },
       "location": "[resourceGroup().location]",
       "tags": {
-        "displayName": "VirtualMachine"
+        "displayName": "[concat('Test VM ', copyIndex())]"
       },
       "dependsOn": [
         "[resourceId('Microsoft.Storage/storageAccounts/', variables('vhdStorageAccountName'))]",
-        "[resourceId('Microsoft.Network/networkInterfaces/', variables('nicName'))]"
+        "nicLoop"
       ],
       "properties": {
         "hardwareProfile": {
-          "vmSize": "[variables('vmSize')]"
+          "vmSize": "[parameters('vmSize')]"
         },
         "osProfile": {
-          "computerName": "[variables('vmName')]",
+          "computerName": "[concat(variables('vmName'),copyIndex())]",
           "adminUsername": "[parameters('adminUsername')]",
           "adminPassword": "[parameters('adminPassword')]"
         },
@@ -169,16 +208,32 @@
           "osDisk": {
             "name": "osdisk",
             "vhd": {
-              "uri": "[concat(reference(resourceId('Microsoft.Storage/storageAccounts', variables('vhdStorageAccountName')), '2016-01-01').primaryEndpoints.blob, variables('vhdStorageContainerName'), '/', variables('OSDiskName'), '.vhd')]"
+              "uri": "[concat(reference(resourceId('Microsoft.Storage/storageAccounts', variables('vhdStorageAccountName')), '2016-01-01').primaryEndpoints.blob, variables('vhdStorageContainerName'),'vhds',copyIndex('vmCopy'), '/',variables('vmName'),copyIndex('vmCopy'),'-', variables('OSDiskName'), '.vhd')]"
             },
             "caching": "ReadWrite",
             "createOption": "FromImage"
-          }
+          },
+          "copy": [
+            {
+              "name": "dataDisks",
+              "count": "[parameters('dataDiskCount')]",
+              "input": {
+                "name": "[concat(variables('vmName'),'-data-disk', copyIndex('dataDisks'))]",
+                "lun": "[copyIndex('dataDisks')]",
+                "caching": "None",
+                "createOption": "Empty",
+                "diskSizeGB": "[parameters('dataDiskSize')]",
+                "vhd": {
+                  "uri": "[concat(reference(concat('Microsoft.Storage/storageAccounts/', variables('vhdStorageAccountName')),providers('Microsoft.Storage','storageAccounts').apiVersions[0]).primaryEndpoints.blob,'vhds',copyIndex('vmCopy'),'/',variables('vmName'),copyIndex('vmCopy'),'-', copyIndex('dataDisks'),'.vhd')]"
+                }
+              }
+            }
+          ]
         },
         "networkProfile": {
           "networkInterfaces": [
             {
-              "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('nicName'))]"
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(variables('nicName'), copyindex()))]"
             }
           ]
         },
@@ -199,7 +254,7 @@
             "displayName": "AzureDiagnostics"
           },
           "dependsOn": [
-            "[resourceId('Microsoft.Compute/virtualMachines/', variables('vmName'))]"
+            "[resourceId('Microsoft.Compute/virtualMachines/', concat(variables('vmName'), copyindex()))]"
           ],
           "properties": {
             "publisher": "Microsoft.Azure.Diagnostics",
@@ -480,6 +535,37 @@
             "protectedSettings": {
               "storageAccountName": "[variables('diagnosticsStorageAccountName')]",
               "storageAccountKey": "[listkeys(resourceId('Microsoft.Storage/storageAccounts', variables('diagnosticsStorageAccountName')), '2016-01-01').keys[0].value]"
+            }
+          }
+        },
+        {
+          "name": "Microsoft.Powershell.DSC",
+          "type": "extensions",
+          "location": "[resourceGroup().location]",
+          "apiVersion": "2016-03-30",
+          "dependsOn": [
+            "[resourceId('Microsoft.Compute/virtualMachines', concat(variables('vmName'), copyindex()))]"
+          ],
+          "tags": {
+            "displayName": "DiskPrepTest"
+          },
+          "properties": {
+            "publisher": "Microsoft.Powershell",
+            "type": "DSC",
+            "typeHandlerVersion": "2.9",
+            "autoUpgradeMinorVersion": true,
+            "settings": {
+              "configuration": {
+                "url": "[concat(parameters('_artifactsLocation'), '/', variables('DiskPrepTestArchiveFolder'), '/', variables('DiskPrepTestArchiveFileName'))]",
+                "script": "DiskPrepTest.ps1",
+                "function": "DiskPrepAndTest"
+              },
+              "configurationArguments": {
+
+              }
+            },
+            "protectedSettings": {
+              "configurationUrlSasToken": "[parameters('_artifactsLocationSasToken')]"
             }
           }
         }

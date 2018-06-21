@@ -29,6 +29,9 @@
     <Content Include="Deploy-AzureResourceGroup.ps1" />
     <Content Include="WindowsVirtualMachine.json" />
     <Content Include="WindowsVirtualMachine.parameters.json" />
+    <Content Include="DSC\DiskPrepTest.ps1" />
+    <None Include="DSC\ComputerManagementDsc.zip" />
+    <None Include="Tests\TestDiskPrepTest.ps1" />
   </ItemGroup>
   <Target Name="GetReferenceAssemblyPaths" />
 </Project>

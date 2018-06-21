@@ -3,10 +3,24 @@
   "contentVersion": "1.0.0.0",
   "parameters": {
     "adminUsername": {
-      "value": null
+      "value": "mcowen"
     },
     "dnsNameForPublicIP": {
-      "value": null
+      "value": "mgcstack"
+    },
+    "dataDiskSize": {
+      "value": 255
+    },
+    "adminPassword": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/14bbbdfe-3992-46e7-9a9e-65aae95e071a/resourceGroups/Housekeeper-Deployment/providers/Microsoft.KeyVault/vaults/HousekeeperKeyVault"
+        },
+        "secretName": "password"
+      }
+    },
+    "instances": {
+      "value": 2
     }
   }
 }
