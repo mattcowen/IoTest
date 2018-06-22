@@ -18,13 +18,14 @@
     "dnsNameForPublicIP": {
       "type": "string",
       "minLength": 1,
+      "defaultValue": "mgcstack",
       "metadata": {
         "description": "Globally unique DNS Name for the Public IP used to access the Virtual Machine."
       }
     },
     "vmSize": {
       "type": "string",
-      "defaultValue": "Standard_DS2_v2"
+      "defaultValue": "Standard_D2s_v3"
     },
     "windowsOSVersion": {
       "type": "string",
@@ -48,6 +49,26 @@
       "type": "int",
       "defaultValue": 4
     },
+    "diskSpdDownloadUrl": {
+      "type": "string"
+    },
+    "testName": {
+      "type": "string",
+      "defaultValue": "iotest1"
+    },
+    "testParams": {
+      "type": "string",
+      "defaultValue": "-c10G -b8K -t2 -o40 -d30"
+    },
+    "resultsStorageAccountKey": {
+      "type": "securestring"
+    },
+    "resultsStorageUrl": {
+      "type": "string"
+    },
+    "resultsStorageAccountName": {
+      "type": "string"
+    },
     "_artifactsLocation": {
       "type": "string",
       "metadata": {
@@ -66,9 +87,9 @@
     "imageOffer": "WindowsServer",
     "OSDiskName": "osDisk",
     "nicName": "testvm",
-    "addressPrefix": "10.0.0.0/16",
+    "addressPrefix": "10.61.0.0/24",
     "subnetName": "Subnet",
-    "subnetPrefix": "10.0.0.0/24",
+    "subnetPrefix": "10.61.0.0/27",
     "vhdStorageType": "Standard_LRS",
     "publicIPAddressName": "TestVmIp",
     "publicIPAddressType": "Dynamic",
@@ -96,25 +117,6 @@
         "name": "[variables('vhdStorageType')]"
       },
       "kind": "Storage"
-    },
-    {
-      "apiVersion": "2016-03-30",
-      "type": "Microsoft.Network/publicIPAddresses",
-      "name": "[concat(variables('publicIPAddressName'),copyIndex())]",
-      "copy": {
-        "name": "publicIpLoop",
-        "count": "[parameters('instances')]"
-      },
-      "location": "[resourceGroup().location]",
-      "tags": {
-        "displayName": "PublicIPAddress"
-      },
-      "properties": {
-        "publicIPAllocationMethod": "[variables('publicIPAddressType')]",
-        "dnsSettings": {
-          "domainNameLabel": "[concat(parameters('dnsNameForPublicIP'),copyIndex())]"
-        }
-      }
     },
     {
       "apiVersion": "2016-03-30",
@@ -153,7 +155,6 @@
         "displayName": "[concat('NetworkInterface',copyIndex())]"
       },
       "dependsOn": [
-        "publicIpLoop",
         "[resourceId('Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'))]"
       ],
       "properties": {
@@ -162,9 +163,6 @@
             "name": "ipconfig1",
             "properties": {
               "privateIPAllocationMethod": "Dynamic",
-              "publicIPAddress": {
-                "id": "[resourceId('Microsoft.Network/publicIPAddresses', concat(variables('publicIPAddressName'), copyIndex()))]"
-              },
               "subnet": {
                 "id": "[variables('subnetRef')]"
               }
@@ -561,11 +559,15 @@
                 "function": "DiskPrepAndTest"
               },
               "configurationArguments": {
-
+                "diskSpdDownloadUrl": "[parameters('diskSpdDownloadUrl')]",
+                "testParams": "[parameters('testParams')]",
+                "testName": "[parameters('testName')]",
+                "storageUrl": "[parameters('resultsStorageUrl')]",
+                "storageAccountName": "[parameters('resultsStorageAccountName')]",
+                "resultsStorageAccountKey": "[parameters('resultsStorageAccountKey')]"
               }
             },
             "protectedSettings": {
-              "configurationUrlSasToken": "[parameters('_artifactsLocationSasToken')]"
             }
           }
         }

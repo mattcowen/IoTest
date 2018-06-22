@@ -2,14 +2,44 @@
   "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
-    "adminUsername": {
-      "value": "mcowen"
+    "vmSize": {
+      "value": "Standard_D2s_v3",
+      "metadata": {
+        "description": "The VM size to deploy"
+      }
     },
-    "dnsNameForPublicIP": {
-      "value": "mgcstack"
+    "instances": {
+      "value": 2,
+      "metadata": {
+        "description": "Number of Virtual Machines to create"
+      }
+    },
+    "dataDiskCount": {
+      "value": 4,
+      "metadata": {
+        "description": "Number of data disks in GB. N.B. the VM SKU chosen will have a maximum limit."
+      }
     },
     "dataDiskSize": {
-      "value": 255
+      "value": 255,
+      "metadata": {
+        "description": "Size of data disks in GB"
+      }
+    },
+    "testName": {
+      "value": "iotest1",
+      "metadata": {
+        "description": "The name used in the output sent to the results storage account"
+      }
+    },
+    "testParams": {
+      "value": "-c10G -b8K -t2 -o40 -d30",
+      "metadata": {
+        "description": "The parameters passed to DiskSpd.exe. N.B. -si is always specified to prevent DSC error caused by warning"
+      }
+    },
+    "adminUsername": {
+      "value": "mcowen"
     },
     "adminPassword": {
       "reference": {
@@ -19,8 +49,22 @@
         "secretName": "password"
       }
     },
-    "instances": {
-      "value": 2
+    "diskSpdDownloadUrl": {
+      "value": "https://housekeeperdeployment.blob.core.windows.net/stacktest/DiskSpd-2.0.20a.zip"
+    },
+    "resultsStorageUrl": {
+      "value": "\\\\housekeeperdeployment.file.core.windows.net\\artifacts"
+    },
+    "resultsStorageAccountName": {
+      "value": "housekeeperdeployment"
+    },
+    "resultsStorageAccountKey": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/14bbbdfe-3992-46e7-9a9e-65aae95e071a/resourceGroups/Housekeeper-Deployment/providers/Microsoft.KeyVault/vaults/HousekeeperKeyVault"
+        },
+        "secretName": "fileStorageKey"
+      }
     }
   }
 }
