@@ -31,6 +31,7 @@
     <Content Include="WindowsVirtualMachine.parameters.json" />
     <Content Include="DSC\DiskPrepTest.ps1" />
     <None Include="DSC\ComputerManagementDsc.zip" />
+    <None Include="Tests\TestDiskPrepTest-AzureDscExt.ps1" />
     <None Include="Tests\TestDiskPrepTest.ps1" />
   </ItemGroup>
   <Target Name="GetReferenceAssemblyPaths" />

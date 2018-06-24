@@ -3,13 +3,13 @@
   "contentVersion": "1.0.0.0",
   "parameters": {
     "vmSize": {
-      "value": "Standard_D2s_v3",
+      "value": "Standard_D4s_v3",
       "metadata": {
         "description": "The VM size to deploy"
       }
     },
     "instances": {
-      "value": 2,
+      "value": 1,
       "metadata": {
         "description": "Number of Virtual Machines to create"
       }
@@ -17,7 +17,7 @@
     "dataDiskCount": {
       "value": 4,
       "metadata": {
-        "description": "Number of data disks in GB. N.B. the VM SKU chosen will have a maximum limit."
+        "description": "Number of data disks. N.B. the VM SKU chosen will have a maximum limit."
       }
     },
     "dataDiskSize": {
@@ -52,9 +52,6 @@
     "diskSpdDownloadUrl": {
       "value": "https://housekeeperdeployment.blob.core.windows.net/stacktest/DiskSpd-2.0.20a.zip"
     },
-    "resultsStorageUrl": {
-      "value": "\\\\housekeeperdeployment.file.core.windows.net\\artifacts"
-    },
     "resultsStorageAccountName": {
       "value": "housekeeperdeployment"
     },
@@ -65,6 +62,9 @@
         },
         "secretName": "fileStorageKey"
       }
+    },
+    "storageContainerName": {
+      "value": "stacktestresults"
     }
   }
 }

@@ -20,12 +20,15 @@
       "minLength": 1,
       "defaultValue": "mgcstack",
       "metadata": {
-        "description": "Globally unique DNS Name for the Public IP used to access the Virtual Machine."
+        "description": "NOT IN USE"
       }
     },
     "vmSize": {
       "type": "string",
-      "defaultValue": "Standard_D2s_v3"
+      "defaultValue": "Standard_D2s_v3",
+      "metadata": {
+        "description": "The VM size to deploy"
+      }
     },
     "windowsOSVersion": {
       "type": "string",
@@ -39,18 +42,30 @@
     },
     "instances": {
       "type": "int",
-      "defaultValue": 2
+      "defaultValue": 2,
+      "metadata": {
+        "description": "Number of Virtual Machines to create"
+      }
     },
     "dataDiskSize": {
       "type": "int",
-      "defaultValue": 255
+      "defaultValue": 255,
+      "metadata": {
+        "description": "Size of data disks in GB"
+      }
     },
     "dataDiskCount": {
       "type": "int",
-      "defaultValue": 4
+      "defaultValue": 4,
+      "metadata": {
+        "description": "Number of data disks. N.B. the VM SKU chosen will have a maximum limit."
+      }
     },
     "diskSpdDownloadUrl": {
-      "type": "string"
+      "type": "string",
+      "metadata": {
+        "description": "The URL from which to download the ZIP of the official version of DiskSpd.exe. DSC expects a certain folder layout."
+      }
     },
     "testName": {
       "type": "string",
@@ -58,12 +73,15 @@
     },
     "testParams": {
       "type": "string",
-      "defaultValue": "-c10G -b8K -t2 -o40 -d30"
+      "defaultValue": "-c10G -b8K -t2 -o40 -d30",
+      "metadata": {
+        "description": "The parameters passed to DiskSpd.exe. N.B. -si is always specified to prevent DSC error caused by warning"
+      }
     },
     "resultsStorageAccountKey": {
-      "type": "securestring"
+      "type": "string"
     },
-    "resultsStorageUrl": {
+    "storageContainerName": {
       "type": "string"
     },
     "resultsStorageAccountName": {
@@ -562,12 +580,13 @@
                 "diskSpdDownloadUrl": "[parameters('diskSpdDownloadUrl')]",
                 "testParams": "[parameters('testParams')]",
                 "testName": "[parameters('testName')]",
-                "storageUrl": "[parameters('resultsStorageUrl')]",
+                "storageContainerName": "[parameters('storageContainerName')]",
                 "storageAccountName": "[parameters('resultsStorageAccountName')]",
-                "resultsStorageAccountKey": "[parameters('resultsStorageAccountKey')]"
+                "storageAccountKey": "[parameters('resultsStorageAccountKey')]"
               }
             },
             "protectedSettings": {
+              "configurationUrlSasToken": "[parameters('_artifactsLocationSasToken')]"
             }
           }
         }
