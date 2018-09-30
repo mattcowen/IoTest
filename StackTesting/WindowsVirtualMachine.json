@@ -79,10 +79,14 @@
       }
     },
     "resultsStorageAccountKey": {
-      "type": "string"
+      "type": "securestring"
     },
     "storageContainerName": {
       "type": "string"
+    },
+    "storageUrlDomain": {
+      "type": "string",
+      "defaultValue": "blob.core.windows.net"
     },
     "resultsStorageAccountName": {
       "type": "string"
@@ -107,8 +111,8 @@
     "nicName": "testvm",
     "addressPrefix": "10.61.0.0/24",
     "subnetName": "Subnet",
-    "subnetPrefix": "10.61.0.0/27",
-    "vhdStorageType": "Standard_LRS",
+    "subnetPrefix": "10.61.0.0/24",
+    "vhdStorageType": "Premium_LRS",
     "publicIPAddressName": "TestVmIp",
     "publicIPAddressType": "Dynamic",
     "vhdStorageContainerName": "vhds",
@@ -134,10 +138,24 @@
       "sku": {
         "name": "[variables('vhdStorageType')]"
       },
-      "kind": "Storage"
+      "kind": "Storage",
+      "resources": [
+        {
+          "type": "blobServices/containers",
+          "apiVersion": "2018-03-01-preview",
+          "name": "[concat('default/', parameters('testName'))]",
+          "dependsOn": [
+            "[variables('vhdStorageAccountName')]"
+          ],
+          "properties": {
+            "publicAccess": "None"
+          }
+        }
+      ]
+
     },
     {
-      "apiVersion": "2016-03-30",
+      "apiVersion": "2015-05-01-preview",
       "type": "Microsoft.Network/virtualNetworks",
       "name": "[variables('virtualNetworkName')]",
       "location": "[resourceGroup().location]",
@@ -161,7 +179,7 @@
       }
     },
     {
-      "apiVersion": "2016-03-30",
+      "apiVersion": "2015-05-01-preview",
       "type": "Microsoft.Network/networkInterfaces",
       "name": "[concat(variables('nicName'), copyIndex())]",
       "copy": {
@@ -236,7 +254,7 @@
               "input": {
                 "name": "[concat(variables('vmName'),'-data-disk', copyIndex('dataDisks'))]",
                 "lun": "[copyIndex('dataDisks')]",
-                "caching": "None",
+                "caching": "ReadWrite",
                 "createOption": "Empty",
                 "diskSizeGB": "[parameters('dataDiskSize')]",
                 "vhd": {
@@ -264,7 +282,7 @@
         {
           "type": "extensions",
           "name": "Microsoft.Insights.VMDiagnosticsSettings",
-          "apiVersion": "2016-03-30",
+          "apiVersion": "2015-06-15",
           "location": "[resourceGroup().location]",
           "tags": {
             "displayName": "AzureDiagnostics"
@@ -275,7 +293,7 @@
           "properties": {
             "publisher": "Microsoft.Azure.Diagnostics",
             "type": "IaaSDiagnostics",
-            "typeHandlerVersion": "1.5",
+            "typeHandlerVersion": "1.4",
             "autoUpgradeMinorVersion": true,
             "settings": {
               "WadCfg": {
@@ -558,7 +576,7 @@
           "name": "Microsoft.Powershell.DSC",
           "type": "extensions",
           "location": "[resourceGroup().location]",
-          "apiVersion": "2016-03-30",
+          "apiVersion": "2015-06-15",
           "dependsOn": [
             "[resourceId('Microsoft.Compute/virtualMachines', concat(variables('vmName'), copyindex()))]"
           ],
@@ -568,7 +586,7 @@
           "properties": {
             "publisher": "Microsoft.Powershell",
             "type": "DSC",
-            "typeHandlerVersion": "2.9",
+            "typeHandlerVersion": "2.19",
             "autoUpgradeMinorVersion": true,
             "settings": {
               "configuration": {
@@ -582,7 +600,9 @@
                 "testName": "[parameters('testName')]",
                 "storageContainerName": "[parameters('storageContainerName')]",
                 "storageAccountName": "[parameters('resultsStorageAccountName')]",
-                "storageAccountKey": "[parameters('resultsStorageAccountKey')]"
+                "storageAccountKey": "[parameters('resultsStorageAccountKey')]",
+                "storageUrlDomain": "[parameters('storageUrlDomain')]",
+                "uploadUrlWithSas": "[concat(reference(concat('Microsoft.Storage/storageAccounts/', variables('vhdStorageAccountName')),providers('Microsoft.Storage','storageAccounts').apiVersions[0]).primaryEndpoints.blob, parameters('testName'))]"
               }
             },
             "protectedSettings": {

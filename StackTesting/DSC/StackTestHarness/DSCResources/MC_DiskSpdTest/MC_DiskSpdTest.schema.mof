@@ -1,0 +1,15 @@
+[ClassVersion("1.0.0"), FriendlyName("DiskSpdTest")]
+class MC_DiskSpdTest : OMI_BaseResource
+{
+  [Key] string TestName;
+  [Required] string PhysicalPathToDiskSpd;
+  [write,ValueMap{"Present", "Absent"},Values{"Present", "Absent"}] string Ensure;
+  [write] string DiskSpdParameters;
+  [write] string ResultsOutputDirectory;
+  [write] string StorageAccountName;
+  [write] string StorageAccountKey;
+  [write] string StorageContainerName;
+  [write] string StorageUrlDomain;
+  [write] string UploadUrlWithSas;
+  [write] string PerformanceCounters[];
+};

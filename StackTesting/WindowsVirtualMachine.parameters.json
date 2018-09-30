@@ -21,7 +21,7 @@
       }
     },
     "dataDiskSize": {
-      "value": 255,
+      "value": 1024,
       "metadata": {
         "description": "Size of data disks in GB"
       }
@@ -33,7 +33,7 @@
       }
     },
     "testParams": {
-      "value": "-c10G -b8K -t2 -o40 -d30",
+      "value": "-c200M -t2 -o20 -d300 -w50",
       "metadata": {
         "description": "The parameters passed to DiskSpd.exe. N.B. -si is always specified to prevent DSC error caused by warning"
       }
@@ -44,27 +44,28 @@
     "adminPassword": {
       "reference": {
         "keyVault": {
-          "id": "/subscriptions/14bbbdfe-3992-46e7-9a9e-65aae95e071a/resourceGroups/Housekeeper-Deployment/providers/Microsoft.KeyVault/vaults/HousekeeperKeyVault"
+          "id": "/subscriptions/4f50786d-0c67-4da6-b423-8c3950bc2b3c/resourceGroups/MgcTestHarness/providers/Microsoft.KeyVault/vaults/TestHarnessKeyVault"
         },
         "secretName": "password"
       }
     },
     "diskSpdDownloadUrl": {
-      "value": "https://housekeeperdeployment.blob.core.windows.net/stacktest/DiskSpd-2.0.20a.zip"
+      "value": "https://gallery.technet.microsoft.com/DiskSpd-A-Robust-Storage-6ef84e62/file/199535/1/DiskSpd-2.0.20a.zip"
     },
     "resultsStorageAccountName": {
-      "value": "housekeeperdeployment"
+      "value": "mctestharness"
     },
     "resultsStorageAccountKey": {
       "reference": {
         "keyVault": {
-          "id": "/subscriptions/14bbbdfe-3992-46e7-9a9e-65aae95e071a/resourceGroups/Housekeeper-Deployment/providers/Microsoft.KeyVault/vaults/HousekeeperKeyVault"
+          "id": "/subscriptions/4f50786d-0c67-4da6-b423-8c3950bc2b3c/resourceGroups/MgcTestHarness/providers/Microsoft.KeyVault/vaults/TestHarnessKeyVault"
         },
-        "secretName": "fileStorageKey"
+        "secretName": "storageKey"
       }
     },
     "storageContainerName": {
       "value": "stacktestresults"
     }
+    
   }
 }

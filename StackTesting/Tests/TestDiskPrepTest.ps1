@@ -3,7 +3,7 @@
 #
 
 # get credential
-$creds = Get-Credential Azure\housekeeperdeployment
+$creds = Get-Credential Azure\mgcdeployment
 
 
 $configData =@{
@@ -18,16 +18,16 @@ $configData =@{
 }
 
 $params = @{
-	diskSpdDownloadUrl = "https://housekeeperdeployment.blob.core.windows.net/stacktest/DiskSpd-2.0.20a.zip"
-	testParams = '-c10G -b8K -t2 -o40 -d30'
-	testName = 'foo'
-	resultsStorageAccountKey = $creds.Password
-	storageUrl = '\\housekeeperdeployment.file.core.windows.net\artifacts'
-	storageAccountName = 'housekeeperdeployment'
-
+	diskSpdDownloadUrl = "https://gallery.technet.microsoft.com/DiskSpd-A-Robust-Storage-6ef84e62/file/199535/1/DiskSpd-2.0.20a.zip"
+	testParams = '-c200M -b8K -t2 -o20 -d30'
+	testName = 'iotest1'
+	storageAccountKey = ''
+	storageContainerName = 'stacktestresults'
+	storageAccountName = 'mgctestharness'
+	uploadUrlWithSas = ''
 }
 
 
 DiskPrepAndTest @params -Verbose
 
-Start-DscConfiguration -ComputerName localhost -Credential (Get-Credential mcowen) -Path .\DiskPrepAndTest -Verbose -Wait -Force
+Start-DscConfiguration -ComputerName localhost -Path .\DiskPrepAndTest -Verbose -Wait -Force

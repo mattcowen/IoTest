@@ -10,7 +10,7 @@ Configuration DiskPrepAndTest
 
 		[Parameter(Mandatory = $true)]
 		[ValidateNotNullorEmpty()] 
-		[String]$diskSpdDownloadUrl,
+		[String]$diskSpdDownloadUrl, # https://gallery.technet.microsoft.com/DiskSpd-A-Robust-Storage-6ef84e62/file/199535/1/DiskSpd-2.0.20a.zip
 
 		[Parameter(Mandatory = $false)]
 		[ValidateNotNullorEmpty()] 
@@ -21,13 +21,17 @@ Configuration DiskPrepAndTest
 		[String]$testName,
 
 		[String]$storageAccountKey, # from the properties of the storage account
-		[String]$storageContainerName,  # e.g. testresults
-		[String]$storageAccountName # e.g. housekeeperdeployment
+		[String]$storageContainerName,  
+		[String]$storageAccountName,
+		[String]$storageUrlDomain = 'blob.core.windows.net', # this will be different for an Azure Stack
+		
+		[String]$uploadUrlWithSas # this is used for the network test of uploading and downloading a file
 		
 	)
  
+		
 	# Modules to Import
-	Import-DscResource –ModuleName PSDesiredStateConfiguration, ComputerManagementDsc, FileDownloadDSC
+	Import-DscResource –ModuleName PSDesiredStateConfiguration, ComputerManagementDsc, FileDownloadDSC, StackTestHarness
  
 	Node localhost
 	{
@@ -43,12 +47,19 @@ Configuration DiskPrepAndTest
 			IsSingleInstance = 'Yes'
 			TimeZone = $SystemTimeZone 
 		} 
+
+		#WindowsFeature Containers
+		#{
+		#	Name = "Containers"
+		#	Ensure = "Present"
+		#}
  
 		WindowsFeature SMBv1 
 		{
 			Name = "FS-SMB1"
 			Ensure = "Absent" 
 		}
+
 
  		Script StoragePool 
 		{
@@ -72,7 +83,7 @@ Configuration DiskPrepAndTest
 				New-VirtualDisk –StoragePoolFriendlyName StoragePool1 –FriendlyName VirtualDisk1 –ResiliencySettingName simple -NumberOfColumns $diskNum –UseMaximumSize 
 			}
 			TestScript = {
-				(get-virtualdisk -ErrorAction SilentlyContinue -friendlyName VirtualDisk1).operationalSatus -EQ 'OK' 
+				(get-virtualdisk -ErrorAction SilentlyContinue -friendlyName VirtualDisk1).operationalStatus -EQ 'OK' 
 			}
 			GetScript = { 
 				@{Ensure = if ((Get-VirtualDisk -FriendlyName VirtualDisk1).OperationalStatus -eq 'OK') {'Present'} Else {'Absent'}}
@@ -93,6 +104,14 @@ Configuration DiskPrepAndTest
 			} 
 			DependsOn = "[Script]VirtualDisk" 
 		}
+		
+		File ResultsDirectory
+		{
+			DestinationPath = 'F:\results'
+			Ensure = "Present"
+			Type = 'Directory'
+			DependsOn = "[Script]FormatDisk"
+		}
 
 		FileDownload DiskSpdDownload
         {
@@ -108,65 +127,23 @@ Configuration DiskPrepAndTest
 			DependsOn = "[FileDownload]DiskSpdDownload"
         }
 
-		Script RunTest
+		DiskSpdTest test
 		{
-			SetScript = {
-				
-				# we need the -si parameter at the moment because 
-				# otherwise diskspd will issue a warning that
-				# dsc flags as an error
-				$resultsfile = [System.IO.FileInfo]"C:\$using:testName-$(Get-Date -Format yyyy-MM-dd-hhmmssff).txt"
-				
-				Write-Verbose "Running test and outputting to $resultsfile"
-
-				$cmd = 'C:\DiskSpd\amd64\diskspd.exe '+$using:testParams+' -si F:\testfile1.dat'
-				iex $cmd > $resultsfile
-
-				Write-Verbose "Uploading to storage..."
-
-				$fileLength=(Get-Item $resultsfile).length
-
-				$StorageAccount = $using:storageAccountName
-				$Key = $using:storageAccountKey
-				$resource = $using:storageContainerName
-
-				$date = [System.DateTime]::UtcNow.ToString("R")
-
-				$stringToSign = "PUT`n`n`n$fileLength`n`n`n`n`n`n`n`n`nx-ms-blob-type:BlockBlob`nx-ms-date:$date`nx-ms-version:2015-04-05`n/$StorageAccount/$resource/"+$resultsfile.Name
-				Write-Verbose "String to sign: $stringToSign"
-
-				$sharedKey = [System.Convert]::FromBase64String($Key)
-				$hasher = New-Object System.Security.Cryptography.HMACSHA256
-				$hasher.Key = $sharedKey
-
-				$signedSignature = [System.Convert]::ToBase64String($hasher.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($stringToSign)))
-				
-				$authHeader = "SharedKey ${StorageAccount}:$signedSignature"
-
-				$headers = @{
-					"Authorization"=$authHeader
-					"x-ms-date"=$date
-					"x-ms-version"="2015-04-05"
-					"x-ms-blob-type"="BlockBlob"
-				}
-				$url = "https://$StorageAccount.blob.core.windows.net/$resource/"+$resultsfile.Name
-				
-				$response = Invoke-RestMethod -method PUT -InFile $resultsfile `
-							 -Uri $url `
-							 -Headers $headers -Verbose
-				
-				write-host $response
-				Write-Verbose "Uploaded to storage. Done."
-
-			}
-			TestScript = { 
-				$false
-			} 
-			GetScript = {
-				@{Ensure = if (test-path -path "C:\DiskSpd\amd64\diskspd.exe") {'Present'} Else {'Absent'}}
-			}
-			#DependsOn = "[Archive]UncompressDiskSpd"
+			TestName = $testName
+			PhysicalPathToDiskSpd = "C:\DiskSpd\amd64\"
+			ResultsOutputDirectory = "F:\results"
+			DiskSpdParameters = $testParams
+			StorageAccountName = $storageAccountName
+			StorageContainerName = $storageContainerName
+			StorageAccountKey = $storageAccountKey
+			StorageUrlDomain = $storageUrlDomain
+			UploadUrlWithSas = $uploadUrlWithSas
+			Ensure = "Present"
+			DependsOn = "[Archive]UncompressDiskSpd"
 		}
+
+
+
 	}
 
 
@@ -174,3 +151,5 @@ Configuration DiskPrepAndTest
 
 
 }
+
+
