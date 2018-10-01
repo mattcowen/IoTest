@@ -2,7 +2,7 @@
 # ParallelRamp.ps1
 #
 param(
-	$tests = @('test1-', 'test2-', 'test3-', 'test4-', 'test5-', 'test6-'),
+	$tests = @('first', 'second', 'third', 'fourth', 'fifth', 'sixth'), # DO NOT USE CHARS SUCH AS HYPHENS
 	$pauseBetweenRampInSeconds = 150,
 	$root = 'c:\dev\mod\Stacktesting\StackTesting\',
 	$cred = (Get-Credential -UserName "mcowen" -Message "VM Admin cred"),

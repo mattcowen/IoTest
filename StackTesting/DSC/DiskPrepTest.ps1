@@ -47,13 +47,7 @@ Configuration DiskPrepAndTest
 			IsSingleInstance = 'Yes'
 			TimeZone = $SystemTimeZone 
 		} 
-
-		#WindowsFeature Containers
-		#{
-		#	Name = "Containers"
-		#	Ensure = "Present"
-		#}
- 
+		 
 		WindowsFeature SMBv1 
 		{
 			Name = "FS-SMB1"
@@ -117,7 +111,7 @@ Configuration DiskPrepAndTest
         {
             FileName = "c:\diskspd.zip"
             Url = $diskSpdDownloadUrl
-			DependsOn = "[Script]FormatDisk"
+			DependsOn = "[File]ResultsDirectory"
         }
 
 		Archive UncompressDiskSpd

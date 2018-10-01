@@ -23,6 +23,7 @@ param
 (
     [PSCredential]$cred,
     [String]$baseResourceGroup = 'StackTesting', # where the vnet is deployed
+	[String]$resourceGroupNamePrefix = 'StackTesting-',
     [String]$location = 'northeurope',    
     [String]$resultsStorageAccountName = 'mctestharness', # where the results from performance counters are saved
     [String]$resultsStorageAccountRg = 'MgcTestHarness',
@@ -35,7 +36,7 @@ param
     [System.IO.FileInfo]$diskSpd = ".\DiskSpd-2.0.20a.zip",
     
     [String]$vmAdminUsername = 'mcowen',
-	[String]$vmNamePrefix = 'ramp1-',
+	[String]$vmNamePrefix = 'first', # DO NOT USE CHARS SUCH AS HYPHENS
 	[String]$vmsize = 'Standard_D4s_v3',   # the size of VM
     [String]$armTemplateFilePath = '.\windowsvirtualmachine.json',
     [String]$armTemplateParamsFilePath = '.\windowsvirtualmachine.parameters.json',
@@ -43,6 +44,7 @@ param
     [String]$testParams = '-c200M -t2 -o20 -d30 -w50',     # the parameters for DiskSpd
     [String]$dscPath = 'C:\dev\mod\StackTesting\StackTesting\DSC\DiskPrepTest.ps1',     # the path to the DSC configuration to run on the VMs
     [String]$storageUrlDomain = 'blob.core.windows.net',
+	[Int32]$dataDiskSizeGb = 1024,
 	[switch]$deployArmTemplate # needed for initial deployment to create vnet or if you need to upload artifacts
 
 )
@@ -73,7 +75,7 @@ for ($x = 1; $x -le $totalVmCount; $x++)
 {
     Write-Host "Starting $x"
 
-    $resourceGroup = $baseResourceGroup + $x    
+    $resourceGroup = $resourceGroupNamePrefix + $x    
     
 	$vnetName = 'TestVnet'        # the name of the vnet to add the VMs to (must match what is set in the ARM template)
 
@@ -84,6 +86,7 @@ for ($x = 1; $x -le $totalVmCount; $x++)
 		$vmNamePrefix
         $vmsize
 		$vnetName
+		$dataDiskSizeGb
         $cred
         $x
         $location
@@ -105,6 +108,7 @@ for ($x = 1; $x -le $totalVmCount; $x++)
 			$vmNamePrefix,
             $vmsize,
 			$vnetName,
+			$dataDiskSizeGb,
             $cred, 
             $x, 
             $location,
@@ -141,7 +145,7 @@ for ($x = 1; $x -le $totalVmCount; $x++)
           -Location $location -Type Premium_LRS
 
 		# add container for streaming file in the network tests and acquire full url with SAS token
-		New-AzureStorageContainer -Name $testName -Context $vmStore.Context -ErrorAction SilentlyContinue *>&1
+		New-AzureStorageContainer -Name $testName -Context $vmStore.Context 
 		$uploadSasToken = New-AzureStorageContainerSASToken -Container $testName -FullUri -Context $vmStore.Context -Permission w -ExpiryTime (Get-Date).AddHours(4)
 
         Add-content $log "building refs,$($sw.Elapsed.ToString())"
@@ -153,10 +157,10 @@ for ($x = 1; $x -le $totalVmCount; $x++)
         Add-content $log "creating vm, $($sw.Elapsed.ToString())"
 
         $VirtualMachine = New-AzureRmVMConfig -VMName $vmName -VMSize $vmsize
-		$VirtualMachine = Add-AzureRmVMDataDisk -VM $VirtualMachine -Name 'Data1' -Lun 0 -CreateOption Empty -DiskSizeInGB 1024 -VhdUri "https://$storageAccountName.$storageUrlDomain/disks/$vmName-data1.vhd" -Caching ReadWrite 
-		$VirtualMachine = Add-AzureRmVMDataDisk -VM $VirtualMachine -Name 'Data2' -Lun 1 -CreateOption Empty -DiskSizeInGB 1024 -VhdUri "https://$storageAccountName.$storageUrlDomain/disks/$vmName-data2.vhd" -Caching ReadWrite
-		$VirtualMachine = Add-AzureRmVMDataDisk -VM $VirtualMachine -Name 'Data3' -Lun 2 -CreateOption Empty -DiskSizeInGB 1024 -VhdUri "https://$storageAccountName.$storageUrlDomain/disks/$vmName-data3.vhd" -Caching ReadWrite
-		$VirtualMachine = Add-AzureRmVMDataDisk -VM $VirtualMachine -Name 'Data4' -Lun 3 -CreateOption Empty -DiskSizeInGB 1024 -VhdUri "https://$storageAccountName.$storageUrlDomain/disks/$vmName-data4.vhd" -Caching ReadWrite
+		$VirtualMachine = Add-AzureRmVMDataDisk -VM $VirtualMachine -Name 'Data1' -Lun 0 -CreateOption Empty -DiskSizeInGB $dataDiskSizeGb -VhdUri "https://$storageAccountName.$storageUrlDomain/disks/$vmName-data1.vhd" -Caching ReadWrite 
+		$VirtualMachine = Add-AzureRmVMDataDisk -VM $VirtualMachine -Name 'Data2' -Lun 1 -CreateOption Empty -DiskSizeInGB $dataDiskSizeGb -VhdUri "https://$storageAccountName.$storageUrlDomain/disks/$vmName-data2.vhd" -Caching ReadWrite
+		$VirtualMachine = Add-AzureRmVMDataDisk -VM $VirtualMachine -Name 'Data3' -Lun 2 -CreateOption Empty -DiskSizeInGB $dataDiskSizeGb -VhdUri "https://$storageAccountName.$storageUrlDomain/disks/$vmName-data3.vhd" -Caching ReadWrite
+		$VirtualMachine = Add-AzureRmVMDataDisk -VM $VirtualMachine -Name 'Data4' -Lun 3 -CreateOption Empty -DiskSizeInGB $dataDiskSizeGb -VhdUri "https://$storageAccountName.$storageUrlDomain/disks/$vmName-data4.vhd" -Caching ReadWrite
 		$VirtualMachine = Set-AzureRmVMBootDiagnostics -VM $VirtualMachine -Disable
         $VirtualMachine = Set-AzureRmVMOperatingSystem -VM $VirtualMachine -Windows -ComputerName $vmName -Credential $cred 
         $VirtualMachine = Set-AzureRmVMSourceImage -VM $VirtualMachine -PublisherName "MicrosoftWindowsServer" -Offer "WindowsServer" -Skus "2016-Datacenter" -Version "latest" 
