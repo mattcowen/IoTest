@@ -1,15 +1,15 @@
-$key = (Read-Host -Prompt "Account key" )
-$sas = (Read-Host -Prompt "Container sas")
+$key = Read-Host "key"
+$sas = Read-Host "url"
 
-$paramHash = 
-@{ 
+
+$paramHash = @{ 
     diskSpdDownloadUrl = "https://gallery.technet.microsoft.com/DiskSpd-A-Robust-Storage-6ef84e62/file/199535/1/DiskSpd-2.0.20a.zip"
 	testParams = '-c200M -b8K -t2 -o40 -d30'
 	testName = 'dsctest'
 	storageAccountKey = $key
 	storageContainerName = 'stacktestresults'
 	storageAccountName = 'mctestharness'
-	uploadUrlWithSas = $sas
+	uploadUrlWithSas =  $sas
 }
  
 

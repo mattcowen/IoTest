@@ -3,7 +3,7 @@
 #
 
 # get credential
-$creds = Get-Credential Azure\mgcdeployment
+#$creds = Get-Credential Azure\mgcdeployment
 
 
 $configData =@{

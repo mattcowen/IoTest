@@ -10,7 +10,7 @@ Configuration DiskPrepAndTest
 
 		[Parameter(Mandatory = $true)]
 		[ValidateNotNullorEmpty()] 
-		[String]$diskSpdDownloadUrl, # https://gallery.technet.microsoft.com/DiskSpd-A-Robust-Storage-6ef84e62/file/199535/1/DiskSpd-2.0.20a.zip
+		[String]$diskSpdDownloadUrl,
 
 		[Parameter(Mandatory = $false)]
 		[ValidateNotNullorEmpty()] 
@@ -20,12 +20,12 @@ Configuration DiskPrepAndTest
 		[ValidateNotNullorEmpty()] 
 		[String]$testName,
 
-		[String]$storageAccountKey, # from the properties of the storage account
+		[String]$storageAccountKey,
 		[String]$storageContainerName,  
 		[String]$storageAccountName,
-		[String]$storageUrlDomain = 'blob.core.windows.net', # this will be different for an Azure Stack
 		
-		[String]$uploadUrlWithSas 
+		[String]$uploadUrlWithSas,
+		[String]$storageUrlDomain = 'blob.core.windows.net' 
 
 		
 	)
@@ -105,7 +105,7 @@ Configuration DiskPrepAndTest
 
 		xPendingReboot Reboot1
         {
-            Name = 'BeforeSoftwareInstall'
+            Name = 'Reboot'
         }
 
 		
@@ -134,7 +134,7 @@ Configuration DiskPrepAndTest
 
 		DiskSpdTest test
 		{
-			TestName = $testName
+			TestName = $TestName
 			PhysicalPathToDiskSpd = "C:\DiskSpd\amd64\"
 			ResultsOutputDirectory = "F:\results"
 			DiskSpdParameters = $testParams

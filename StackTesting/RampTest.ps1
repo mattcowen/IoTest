@@ -100,7 +100,7 @@ for ($x = 1; $x -le $totalVmCount; $x++)
 		$storageUrlDomain
     )
 
-    <#$job = Start-Job -ScriptBlock { 
+    $job = Start-Job -ScriptBlock { 
         param(
             $resourceGroup,
             $baseResourceGroup,
@@ -120,7 +120,7 @@ for ($x = 1; $x -le $totalVmCount; $x++)
 			$artifactsContainerName,
 			$dscPath,
 			$storageUrlDomain
-        )#>
+        )
         $vmName = "$vmNamePrefix$x"
         $testName = "$vmNamePrefix"
         $sw = [Diagnostics.Stopwatch]::StartNew()
@@ -150,6 +150,7 @@ for ($x = 1; $x -le $totalVmCount; $x++)
 
 		# add container for streaming file in the network tests and acquire full url with SAS token
 		New-AzureStorageContainer -Name $testName -Context $stdStore.Context 
+
 		$uploadSasToken = New-AzureStorageContainerSASToken -Container $testName -FullUri -Context $stdStore.Context -Permission rw -ExpiryTime (Get-Date).AddHours(4)
 
         Add-content $log "building refs,$($sw.Elapsed.ToString())"
@@ -190,7 +191,7 @@ for ($x = 1; $x -le $totalVmCount; $x++)
 	            storageContainerName = $resultsContainerName
 	            storageAccountName = $resultsStorageAccountName
 				storageUrlDomain = $storageUrlDomain
-				uploadUrlWithSas = $uploadSasToken
+				uploadUrlWithSas = $uploadSasToken + ''
             }
 			
             # above we published the DSC to the root of the container
@@ -223,14 +224,14 @@ for ($x = 1; $x -le $totalVmCount; $x++)
 
             Add-content $log "deleting resource group $resourceGroup,$($sw.Elapsed.ToString())"
             
-            #Remove-AzureRmResourceGroup -Name $resourceGroup -Force
+            Remove-AzureRmResourceGroup -Name $resourceGroup -Force
 
         }
 
 		Add-content $log "done,$($sw.Elapsed.ToString()),$(Get-Date -Format 'yyyy-M-d hh:mm:ss')"
 		$sw.Stop()
 
-    #} -ArgumentList $params
+    } -ArgumentList $params
 
     Write-Host "pausing for $pauseBetweenVmCreateInSeconds seconds"
     Start-Sleep -Seconds $pauseBetweenVmCreateInSeconds
