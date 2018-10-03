@@ -36,6 +36,7 @@
     <None Include="DSC\StackTestHarness\StackTestHarness.psd1" />
     <None Include="DSC\StackTestHarness\DSCResources\MC_DiskSpdTest\MC_DiskSpdTest.psm1" />
     <None Include="DSC\StackTestHarness\DSCResources\MC_DiskSpdTest\MC_DiskSpdTest.schema.mof" />
+    <None Include="DSC\xPendingReboot.zip" />
     <None Include="ParallelRamp.ps1" />
     <None Include="RampTest.ps1" />
     <None Include="Run.ps1" />

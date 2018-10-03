@@ -25,13 +25,14 @@ Configuration DiskPrepAndTest
 		[String]$storageAccountName,
 		[String]$storageUrlDomain = 'blob.core.windows.net', # this will be different for an Azure Stack
 		
-		[String]$uploadUrlWithSas # this is used for the network test of uploading and downloading a file
+		[String]$uploadUrlWithSas 
+
 		
 	)
  
 		
 	# Modules to Import
-	Import-DscResource –ModuleName PSDesiredStateConfiguration, ComputerManagementDsc, FileDownloadDSC, StackTestHarness
+	Import-DscResource –ModuleName PSDesiredStateConfiguration, ComputerManagementDsc, xPendingReboot, FileDownloadDSC, StackTestHarness
  
 	Node localhost
 	{
@@ -39,6 +40,7 @@ Configuration DiskPrepAndTest
         { 
             # This is false by default
             RebootNodeIfNeeded = $true
+			ActionAfterReboot = 'ContinueConfiguration'
 			ConfigurationMode = 'ApplyOnly'
         } 
 
@@ -88,6 +90,8 @@ Configuration DiskPrepAndTest
 		Script FormatDisk 
 		{ 
 			SetScript = { 
+                $global:DSCMachineStatus = 1;
+
 				Get-VirtualDisk –FriendlyName VirtualDisk1 | Get-Disk | Initialize-Disk –Passthru | New-Partition –AssignDriveLetter –UseMaximumSize | Format-Volume -NewFileSystemLabel VirtualDisk1 –AllocationUnitSize 64KB -FileSystem NTFS
 			}
 			TestScript = { 
@@ -96,15 +100,21 @@ Configuration DiskPrepAndTest
 			GetScript = { 
 				@{Ensure = if ((get-volume -filesystemlabel VirtualDisk1).filesystem -EQ 'NTFS') {'Present'} Else {'Absent'}}
 			} 
-			DependsOn = "[Script]VirtualDisk" 
+			DependsOn = "[Script]VirtualDisk"
 		}
+
+		xPendingReboot Reboot1
+        {
+            Name = 'BeforeSoftwareInstall'
+        }
+
 		
 		File ResultsDirectory
 		{
 			DestinationPath = 'F:\results'
 			Ensure = "Present"
 			Type = 'Directory'
-			DependsOn = "[Script]FormatDisk"
+			DependsOn = "[xPendingReboot]Reboot1"
 		}
 
 		FileDownload DiskSpdDownload
@@ -121,6 +131,7 @@ Configuration DiskPrepAndTest
 			DependsOn = "[FileDownload]DiskSpdDownload"
         }
 
+
 		DiskSpdTest test
 		{
 			TestName = $testName
@@ -134,6 +145,7 @@ Configuration DiskPrepAndTest
 			UploadUrlWithSas = $uploadUrlWithSas
 			Ensure = "Present"
 			DependsOn = "[Archive]UncompressDiskSpd"
+
 		}
 
 

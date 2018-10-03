@@ -100,7 +100,7 @@ for ($x = 1; $x -le $totalVmCount; $x++)
 		$storageUrlDomain
     )
 
-    $job = Start-Job -ScriptBlock { 
+    <#$job = Start-Job -ScriptBlock { 
         param(
             $resourceGroup,
             $baseResourceGroup,
@@ -120,7 +120,7 @@ for ($x = 1; $x -le $totalVmCount; $x++)
 			$artifactsContainerName,
 			$dscPath,
 			$storageUrlDomain
-        )
+        )#>
         $vmName = "$vmNamePrefix$x"
         $testName = "$vmNamePrefix"
         $sw = [Diagnostics.Stopwatch]::StartNew()
@@ -140,13 +140,17 @@ for ($x = 1; $x -le $totalVmCount; $x++)
 
         Add-content $log "creating storage,$($sw.Elapsed.ToString())"
 
-        $storageAccountName = 'ramp'+ ([System.Guid]::NewGuid().ToString().Replace('-', '').substring(0, 19))
-        $vmStore = New-AzureRmStorageAccount -ResourceGroupName $resourceGroup -Name $storageAccountName `
+        $vmStorageAccountName = 'vm'+ ([System.Guid]::NewGuid().ToString().Replace('-', '').substring(0, 19))
+        $vmStore = New-AzureRmStorageAccount -ResourceGroupName $resourceGroup -Name $vmStorageAccountName `
           -Location $location -Type Premium_LRS
 
+        $stdStorageAccountName = 'std'+ ([System.Guid]::NewGuid().ToString().Replace('-', '').substring(0, 19))
+        $stdStore = New-AzureRmStorageAccount -ResourceGroupName $resourceGroup -Name $stdStorageAccountName `
+          -Location $location -Type Standard_LRS
+
 		# add container for streaming file in the network tests and acquire full url with SAS token
-		New-AzureStorageContainer -Name $testName -Context $vmStore.Context 
-		$uploadSasToken = New-AzureStorageContainerSASToken -Container $testName -FullUri -Context $vmStore.Context -Permission w -ExpiryTime (Get-Date).AddHours(4)
+		New-AzureStorageContainer -Name $testName -Context $stdStore.Context 
+		$uploadSasToken = New-AzureStorageContainerSASToken -Container $testName -FullUri -Context $stdStore.Context -Permission rw -ExpiryTime (Get-Date).AddHours(4)
 
         Add-content $log "building refs,$($sw.Elapsed.ToString())"
 
@@ -157,15 +161,15 @@ for ($x = 1; $x -le $totalVmCount; $x++)
         Add-content $log "creating vm, $($sw.Elapsed.ToString())"
 
         $VirtualMachine = New-AzureRmVMConfig -VMName $vmName -VMSize $vmsize
-		$VirtualMachine = Add-AzureRmVMDataDisk -VM $VirtualMachine -Name 'Data1' -Lun 0 -CreateOption Empty -DiskSizeInGB $dataDiskSizeGb -VhdUri "https://$storageAccountName.$storageUrlDomain/disks/$vmName-data1.vhd" -Caching ReadWrite 
-		$VirtualMachine = Add-AzureRmVMDataDisk -VM $VirtualMachine -Name 'Data2' -Lun 1 -CreateOption Empty -DiskSizeInGB $dataDiskSizeGb -VhdUri "https://$storageAccountName.$storageUrlDomain/disks/$vmName-data2.vhd" -Caching ReadWrite
-		$VirtualMachine = Add-AzureRmVMDataDisk -VM $VirtualMachine -Name 'Data3' -Lun 2 -CreateOption Empty -DiskSizeInGB $dataDiskSizeGb -VhdUri "https://$storageAccountName.$storageUrlDomain/disks/$vmName-data3.vhd" -Caching ReadWrite
-		$VirtualMachine = Add-AzureRmVMDataDisk -VM $VirtualMachine -Name 'Data4' -Lun 3 -CreateOption Empty -DiskSizeInGB $dataDiskSizeGb -VhdUri "https://$storageAccountName.$storageUrlDomain/disks/$vmName-data4.vhd" -Caching ReadWrite
+		$VirtualMachine = Add-AzureRmVMDataDisk -VM $VirtualMachine -Name 'Data1' -Lun 0 -CreateOption Empty -DiskSizeInGB $dataDiskSizeGb -VhdUri "https://$vmStorageAccountName.$storageUrlDomain/disks/$vmName-data1.vhd" -Caching ReadWrite 
+		$VirtualMachine = Add-AzureRmVMDataDisk -VM $VirtualMachine -Name 'Data2' -Lun 1 -CreateOption Empty -DiskSizeInGB $dataDiskSizeGb -VhdUri "https://$vmStorageAccountName.$storageUrlDomain/disks/$vmName-data2.vhd" -Caching ReadWrite
+		$VirtualMachine = Add-AzureRmVMDataDisk -VM $VirtualMachine -Name 'Data3' -Lun 2 -CreateOption Empty -DiskSizeInGB $dataDiskSizeGb -VhdUri "https://$vmStorageAccountName.$storageUrlDomain/disks/$vmName-data3.vhd" -Caching ReadWrite
+		$VirtualMachine = Add-AzureRmVMDataDisk -VM $VirtualMachine -Name 'Data4' -Lun 3 -CreateOption Empty -DiskSizeInGB $dataDiskSizeGb -VhdUri "https://$vmStorageAccountName.$storageUrlDomain/disks/$vmName-data4.vhd" -Caching ReadWrite
 		$VirtualMachine = Set-AzureRmVMBootDiagnostics -VM $VirtualMachine -Disable
         $VirtualMachine = Set-AzureRmVMOperatingSystem -VM $VirtualMachine -Windows -ComputerName $vmName -Credential $cred 
         $VirtualMachine = Set-AzureRmVMSourceImage -VM $VirtualMachine -PublisherName "MicrosoftWindowsServer" -Offer "WindowsServer" -Skus "2016-Datacenter" -Version "latest" 
 
-        $VirtualMachine = Set-AzureRmVMOSDisk -VM $VirtualMachine -Name 'OsDisk' -VhdUri "https://$storageAccountName.$storageUrlDomain/disks/$vmName.vhd" -CreateOption 'FromImage'
+        $VirtualMachine = Set-AzureRmVMOSDisk -VM $VirtualMachine -Name 'OsDisk' -VhdUri "https://$vmStorageAccountName.$storageUrlDomain/disks/$vmName.vhd" -CreateOption 'FromImage'
         $VirtualMachine = Add-AzureRmVMNetworkInterface -VM $VirtualMachine -Id $NIC.Id
 
 		### create the VM ###
@@ -177,7 +181,7 @@ for ($x = 1; $x -le $totalVmCount; $x++)
 
         if($vmresult.IsSuccessStatusCode){
             
-			Add-content $log "publishing dsc,$($sw.Elapsed.ToString())"
+			Add-content $log "publishing dsc,$($sw.Elapsed.ToString()),$uploadSasToken"
             $dscConfigParams = @{ 
                 diskSpdDownloadUrl = $diskSpdDownloadUrl
 	            testParams = $testParams
@@ -219,14 +223,14 @@ for ($x = 1; $x -le $totalVmCount; $x++)
 
             Add-content $log "deleting resource group $resourceGroup,$($sw.Elapsed.ToString())"
             
-            Remove-AzureRmResourceGroup -Name $resourceGroup -Force
+            #Remove-AzureRmResourceGroup -Name $resourceGroup -Force
 
         }
 
 		Add-content $log "done,$($sw.Elapsed.ToString()),$(Get-Date -Format 'yyyy-M-d hh:mm:ss')"
 		$sw.Stop()
 
-    } -ArgumentList $params
+    #} -ArgumentList $params
 
     Write-Host "pausing for $pauseBetweenVmCreateInSeconds seconds"
     Start-Sleep -Seconds $pauseBetweenVmCreateInSeconds

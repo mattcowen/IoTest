@@ -32,36 +32,7 @@ function Get-TargetResource
 
     )
 
-    $getTargetResourceResult = $null;
-	$n = "perfctr-$TestName-$env:COMPUTERNAME"
-	
-	$testHarnessParametersPath = [io.path]::combine($ResultsOutputDirectory, $n + ".txt")
-	$resultsPath = [io.path]::combine($ResultsOutputDirectory, $n + ".blg")
-	$resultsExist = [System.IO.File]::Exists($resultsPath)
-
-	if($resultsExist){
-		$line = (Get-Content $testHarnessParametersPath | Select-String -Pattern '^PerfCounters:' | Select -ExpandProperty line).Replace('PerfCounters:', '')
-		$diskParams = (Get-Content $testHarnessParametersPath | Select-String -Pattern '^DiskSpdParams:' | Select -ExpandProperty line).Replace('DiskSpdParams:', '')
-		
-		$getTargetResourceResult =  @{
-			Ensure = "Present";
-			PhysicalPathToDiskSpd = $PhysicalPathToDiskSpd;
-			DiskSpdParameters = $diskParams;
-			TestName = $TestName;
-			ResultsOutputDirectory = $ResultsOutputDirectory;
-			PerformanceCounters = ($line.Split(','));
-		}
-	}
-	else{
-		$getTargetResourceResult =  @{
-			Ensure = $Ensure;
-			PhysicalPathToDiskSpd = $PhysicalPathToDiskSpd;
-			DiskSpdParameters = $DiskSpdParameters;
-			TestName = $TestName;
-			ResultsOutputDirectory = $ResultsOutputDirectory;
-			PerformanceCounters = $PerformanceCounters;
-		}
-	}
+	$getTargetResourceResult =  @{}
 
     $getTargetResourceResult;
 }
@@ -104,26 +75,15 @@ function Set-TargetResource
     <# If Ensure is set to "Present" and the results file does not exist, then run test using the specified parameter values #>
 	if(-not $resultsExist -and $Ensure -eq "Present"){
 		
-
-		<# disable ESC
-		$AdminKey = "HKLM:\SOFTWARE\Microsoft\Active Setup\Installed Components\{A509B1A7-37EF-4b3f-8CFC-4F3A74704073}"
-		$UserKey = "HKLM:\SOFTWARE\Microsoft\Active Setup\Installed Components\{A509B1A8-37EF-4b3f-8CFC-4F3A74704073}"
-		Set-ItemProperty -Path $AdminKey -Name "IsInstalled" -Value 0
-		Set-ItemProperty -Path $UserKey -Name "IsInstalled" -Value 0
-		Stop-Process -Name Explorer
-		Write-Host "IE Enhanced Security Configuration (ESC) has been disabled." -ForegroundColor Green #>
-
-
 		$iopsTestFilePath = [io.path]::combine($ResultsOutputDirectory, $TestName + ".dat")
 		$testHarnessfile = [System.IO.FileInfo][io.path]::combine($ResultsOutputDirectory, $n + ".txt")
 		$diskSpdPath = [io.path]::combine($PhysicalPathToDiskSpd, "diskspd.exe")
-		
-		if(-not [System.IO.File]::Exists($diskSpdPath)){
-			Start-Sleep -Seconds 5
-		}
 
-		Add-Content -Path $testHarnessfile -Value "PerfCounters:$([system.String]::Join(",",$PerformanceCounters))"
+
+		Add-Content -Path $testHarnessfile -Value "PhysicalPathToDiskSpd:$PhysicalPathToDiskSpd"
 		Add-Content -Path $testHarnessfile -Value "DiskSpdParams:$DiskSpdParameters"
+		Add-Content -Path $testHarnessfile -Value "TestName:$TestName"
+		Add-Content -Path $testHarnessfile -Value "PerfCounters:$([system.String]::Join(",",$PerformanceCounters))"
 
 		Write-Verbose "Running test $TestName with params $DiskSpdParameters"
 
@@ -131,14 +91,12 @@ function Set-TargetResource
 
 		# run the diskspd test and output to a file
 		$cmd = "$diskSpdPath $DiskSpdParameters $iopsTestFilePath"
-		iex $cmd *> $testHarnessfile
+		iex $cmd *>> $testHarnessfile
 
-		# save diskSpd output to txt file
-		Add-Content -Path $testHarnessfile -Value "DiskSpdResults:`n$diskSpdResults"
-		
 		# upload iops test file to test the network
-		Write-Verbose "Uploading test iops file $iopsTestFilePath"
-		$endpoint = "$($uploadUrlWithSas.Split('?')[0])/$("$TestName.dat")?$($uploadUrlWithSas.Split('?')[1])"
+		$endpoint = "$($UploadUrlWithSas.Split('?')[0])/$("$TestName.dat")?$($UploadUrlWithSas.Split('?')[1])"
+		Write-Verbose "Uploading test iops file $iopsTestFilePath to $UploadUrlWithSas"
+		Write-Verbose "$endpoint"
 		$headers = @{
 			"x-ms-blob-type"="BlockBlob"
 			"Content-Length"=(Get-Item $iopsTestFilePath).length
@@ -146,8 +104,7 @@ function Set-TargetResource
 		
 		$response = Invoke-RestMethod -method PUT -InFile $iopsTestFilePath `
 					-Uri $endpoint `
-                    -Headers $headers -ErrorVariable $uploadError `
-					-Verbose
+                    -Headers $headers -ErrorVariable $uploadError -Verbose
 		
 		if($uploadError){
 			Add-Content -Path $testHarnessfile -Value "UploadError:$uploadError"
