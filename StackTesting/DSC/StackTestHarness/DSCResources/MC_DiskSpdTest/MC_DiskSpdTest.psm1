@@ -91,7 +91,9 @@ function Set-TargetResource
 
 		# run the diskspd test and output to a file
 		$cmd = "$diskSpdPath $DiskSpdParameters $iopsTestFilePath"
-		iex $cmd *>> $testHarnessfile
+		iex $cmd -ErrorAction SilentlyContinue -ErrorVariable diskSpdError -OutVariable diskspdOut
+
+		Add-Content -Path $testHarnessfile -Value "DiskSpdResults:`n$diskspdOut"
 
 		# upload iops test file to test the network
 		$endpoint = "$($UploadUrlWithSas.Split('?')[0])/$("$TestName.dat")?$($UploadUrlWithSas.Split('?')[1])"
@@ -104,7 +106,7 @@ function Set-TargetResource
 		
 		$response = Invoke-RestMethod -method PUT -InFile $iopsTestFilePath `
 					-Uri $endpoint `
-                    -Headers $headers -ErrorVariable $uploadError -Verbose
+                    -Headers $headers -ErrorVariable uploadError -Verbose
 		
 		if($uploadError){
 			Add-Content -Path $testHarnessfile -Value "UploadError:$uploadError"

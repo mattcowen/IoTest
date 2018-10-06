@@ -23,7 +23,7 @@ param
 (
     [PSCredential]$cred,
     [String]$baseResourceGroup = 'StackTesting', # where the vnet is deployed
-	[String]$resourceGroupNamePrefix = 'StackTesting-',
+	[String]$resourceGroupNamePrefix = 'sta-',
     [String]$location = 'northeurope',    
     [String]$resultsStorageAccountName = 'mctestharness', # where the results from performance counters are saved
     [String]$resultsStorageAccountRg = 'MgcTestHarness',
@@ -36,15 +36,19 @@ param
     [System.IO.FileInfo]$diskSpd = ".\DiskSpd-2.0.20a.zip",
     
     [String]$vmAdminUsername = 'mcowen',
-	[String]$vmNamePrefix = 'first', # DO NOT USE CHARS SUCH AS HYPHENS
-	[String]$vmsize = 'Standard_D4s_v3',   # the size of VM
+
+	[ValidateLength(3,20)]
+	[String]$vmNamePrefix = 'testvm', # DO NOT USE CHARS SUCH AS HYPHENS
+	[String]$vmsize = 'Standard_D2s_v3',   # the size of VM
     [String]$armTemplateFilePath = '.\windowsvirtualmachine.json',
     [String]$armTemplateParamsFilePath = '.\windowsvirtualmachine.parameters.json',
 	[String]$diskSpdDownloadUrl = "https://gallery.technet.microsoft.com/DiskSpd-A-Robust-Storage-6ef84e62/file/199535/1/DiskSpd-2.0.20a.zip",
-    [String]$testParams = '-c200M -t2 -o20 -d30 -w50',     # the parameters for DiskSpd
+    [String]$testParams = '-c200M -t2 -o20 -d30 -w50 -Rxml',     # the parameters for DiskSpd
     [String]$dscPath = 'C:\dev\mod\StackTesting\StackTesting\DSC\DiskPrepTest.ps1',     # the path to the DSC configuration to run on the VMs
     [String]$storageUrlDomain = 'blob.core.windows.net',
 	[Int32]$dataDiskSizeGb = 1024,
+    [switch]$dontDeleteResourceGroupOnComplete,
+	[switch]$publishDscBeforeStarting,
 	[switch]$deployArmTemplate # needed for initial deployment to create vnet or if you need to upload artifacts
 
 )
@@ -53,22 +57,34 @@ param
 
 if($deployArmTemplate){
 
-# deploy the vnet and the first vm(s)
-.\Deploy-AzureResourceGroup.ps1 -StorageAccountName $resultsStorageAccountName -StorageContainerName $artifactsContainerName `
-    -ResourceGroupName $baseResourceGroup -ResourceGroupLocation $location `
-    -TemplateFile $armTemplateFilePath `
-    -TemplateParametersFile $armTemplateParamsFilePath `
-    -ArtifactStagingDirectory '.' -DSCSourceFolder '.\DSC' -UploadArtifacts
+    Get-AzureRMResourceGroup -Name $resultsStorageAccountRg -ErrorVariable resultsRgNotPresent -ErrorAction SilentlyContinue
+	if($resultsRgNotPresent){
+		New-AzureRmResourceGroup -Name $resultsStorageAccountRg -Location $location
+		
+        $resultsStdStore = New-AzureRmStorageAccount -ResourceGroupName $resultsStorageAccountRg -Name $resultsStorageAccountName `
+          -Location $location -Type Standard_LRS -ErrorAction SilentlyContinue
+		
+		New-AzureStorageContainer -Name $resultsContainerName -Context $resultsStdStore.Context -ErrorAction SilentlyContinue
+		New-AzureStorageContainer -Name $artifactsContainerName -Context $resultsStdStore.Context -ErrorAction SilentlyContinue
+	}
+
+	# deploy the vnet and the first vm(s)
+	.\Deploy-AzureResourceGroup.ps1 -StorageAccountName $resultsStorageAccountName -StorageContainerName $artifactsContainerName `
+		-ResourceGroupName $baseResourceGroup -ResourceGroupLocation $location `
+		-TemplateFile $armTemplateFilePath `
+		-TemplateParametersFile $armTemplateParamsFilePath `
+		-ArtifactStagingDirectory '.' -DSCSourceFolder '.\DSC' -UploadArtifacts
 
 }
 
 
 Enable-AzureRmContextAutosave
 
-
-# we need to publish the dsc to the root of the container
-Publish-AzureRmVMDscConfiguration -ConfigurationPath .\DSC\DiskPrepTest.ps1 -ResourceGroupName $resultsStorageAccountRg `
-    -StorageAccountName $resultsStorageAccountName -ContainerName $artifactsContainerName -Force -Verbose
+if($publishDscBeforeStarting){
+	# we need to publish the dsc to the root of the container
+	Publish-AzureRmVMDscConfiguration -ConfigurationPath $dscPath -ResourceGroupName $resultsStorageAccountRg `
+		-StorageAccountName $resultsStorageAccountName -ContainerName $artifactsContainerName -Force -Verbose
+}
 
 
 for ($x = 1; $x -le $totalVmCount; $x++)
@@ -98,6 +114,7 @@ for ($x = 1; $x -le $totalVmCount; $x++)
 		$artifactsContainerName
 		$dscPath
 		$storageUrlDomain
+		$dontDeleteResourceGroupOnComplete
     )
 
     $job = Start-Job -ScriptBlock { 
@@ -119,14 +136,15 @@ for ($x = 1; $x -le $totalVmCount; $x++)
 			$resultsContainerName,
 			$artifactsContainerName,
 			$dscPath,
-			$storageUrlDomain
+			$storageUrlDomain,
+			$dontDeleteResourceGroupOnComplete
         )
         $vmName = "$vmNamePrefix$x"
         $testName = "$vmNamePrefix"
         $sw = [Diagnostics.Stopwatch]::StartNew()
         $log = "c:\logs\$vmName.log"
 		New-Item -ItemType Directory -Force -Path c:\logs
-        Add-content $log "starting,$(Get-Date -Format 'yyyy-M-d hh:mm:ss')"
+        Add-content $log "starting,$(Get-Date -Format 'yyyy-M-d HH:mm:ss')"
         
         $resultsStorage = Get-AzureRmStorageAccount -Name $resultsStorageAccountName -ResourceGroupName $resultsStorageAccountRg
 
@@ -157,7 +175,19 @@ for ($x = 1; $x -le $totalVmCount; $x++)
 
         $Vnet = Get-AzureRmVirtualNetwork -Name $vnetName -ResourceGroupName $baseResourceGroup
         $SingleSubnet = Get-AzureRmVirtualNetworkSubnetConfig -Name 'Subnet' -VirtualNetwork $Vnet
-        $NIC = New-AzureRmNetworkInterface -Name "nic1" -ResourceGroupName $resourceGroup -Location $location -SubnetId $Vnet.Subnets[0].Id -Force
+        $NIC
+        $nicCreateCount = 4
+        do{
+            # seeing a RetryableError with this cmdlet so retry
+            $NIC = New-AzureRmNetworkInterface -Name "nic1" -ResourceGroupName $resourceGroup -Location $location -SubnetId $Vnet.Subnets[0].Id -Force -ErrorAction SilentlyContinue -ErrorVariable nicCreateError
+            $nicCreateCount -= 1
+            
+			if($nicCreateError){
+				Add-content $log "nic create,$nicCreateError,$($sw.Elapsed.ToString())"
+			}
+			Start-Sleep -Seconds 2
+        }
+        while($nicCreateError -or $nicCreateCount -eq 0)
         
         Add-content $log "creating vm, $($sw.Elapsed.ToString())"
 
@@ -174,7 +204,7 @@ for ($x = 1; $x -le $totalVmCount; $x++)
         $VirtualMachine = Add-AzureRmVMNetworkInterface -VM $VirtualMachine -Id $NIC.Id
 
 		### create the VM ###
-        $vmresult = New-AzureRmVM -VM $VirtualMachine -ResourceGroupName $resourceGroup -Location $location -ErrorVariable $vmOutput -Verbose
+        $vmresult = New-AzureRmVM -VM $VirtualMachine -ResourceGroupName $resourceGroup -Location $location -ErrorVariable vmOutput -Verbose
         
         if($vmOutput){
             Add-content $log "vm result,$vmOutput"
@@ -182,7 +212,7 @@ for ($x = 1; $x -le $totalVmCount; $x++)
 
         if($vmresult.IsSuccessStatusCode){
             
-			Add-content $log "publishing dsc,$($sw.Elapsed.ToString()),$uploadSasToken"
+			Add-content $log "publishing dsc,$($sw.Elapsed.ToString())"
             $dscConfigParams = @{ 
                 diskSpdDownloadUrl = $diskSpdDownloadUrl
 	            testParams = $testParams
@@ -198,7 +228,7 @@ for ($x = 1; $x -le $totalVmCount; $x++)
             $dscResult = Set-AzureRmVMDscExtension -Name Microsoft.Powershell.DSC -ArchiveBlobName 'DiskPrepTest.ps1.zip' `
                 -ArchiveStorageAccountName $resultsStorageAccountName -ArchiveContainerName "$artifactsContainerName" `
                 -ArchiveResourceGroupName $resultsStorageAccountRg -ResourceGroupName $resourceGroup -Version 2.19 -VMName $vmName `
-                -ConfigurationArgument $dscConfigParams -ConfigurationName DiskPrepAndTest -ErrorVariable $dscOutput -Verbose
+                -ConfigurationArgument $dscConfigParams -ConfigurationName DiskPrepAndTest -ErrorVariable dscOutput -Verbose
             
             if($dscOutput){
                 Add-content $log "dsc result,$dscOutput"
@@ -208,12 +238,14 @@ for ($x = 1; $x -le $totalVmCount; $x++)
 
             $c = 6 
             Do{
-                $blobNotPresent = ""
-                $vmName = $vmName.ToUpper() # not sure why but the blob gets created with a vmname in caps
                 Get-AzureStorageBlob -Blob "perfctr-$testName-$vmName.blg" -Container $resultsContainerName `
-                    -Context $resultsStorage.Context -ErrorAction SilentlyContinue -ErrorVariable blobNotPresent
-            
-                if(![string]::IsNullOrEmpty($blobNotPresent))
+                    -Context $resultsStorage.Context -ErrorAction SilentlyContinue -ErrorVariable blob1NotPresent
+				
+				$vmName = $vmName.ToUpper() # not sure why but the blob gets created with a vmname in caps when on stack
+				Get-AzureStorageBlob -Blob "perfctr-$testName-$vmName.blg" -Container $resultsContainerName `
+						-Context $resultsStorage.Context -ErrorAction SilentlyContinue -ErrorVariable blob2NotPresent
+
+                if($blob1NotPresent -and $blob2NotPresent)
                 {
                     Add-content $log "checking for blob"
                     Start-Sleep -Seconds 5
@@ -224,11 +256,13 @@ for ($x = 1; $x -le $totalVmCount; $x++)
 
             Add-content $log "deleting resource group $resourceGroup,$($sw.Elapsed.ToString())"
             
-            Remove-AzureRmResourceGroup -Name $resourceGroup -Force
+			if(-not $dontDeleteResourceGroupOnComplete){
+				Remove-AzureRmResourceGroup -Name $resourceGroup -Force
+			}
 
         }
 
-		Add-content $log "done,$($sw.Elapsed.ToString()),$(Get-Date -Format 'yyyy-M-d hh:mm:ss')"
+		Add-content $log "done,$($sw.Elapsed.ToString()),$(Get-Date -Format 'yyyy-M-d HH:mm:ss')"
 		$sw.Stop()
 
     } -ArgumentList $params
