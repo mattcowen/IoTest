@@ -14,90 +14,116 @@ Steps
 
 
 #>
-#Disconnect-AzureRMAccount
-#Login-AzureRmAccount -Subscription '4f50786d-0c67-4da6-b423-8c3950bc2b3c' -TenantId 10f302d8-3649-4cb2-99aa-b10d766bd3b0
 
 
 
 param
 (
     [PSCredential]$cred,
-    [String]$baseResourceGroup = 'StackTesting', # where the vnet is deployed
 	[String]$resourceGroupNamePrefix = 'sta-',
     [String]$location = 'northeurope',    
-    [String]$resultsStorageAccountName = 'mctestharness', # where the results from performance counters are saved
-    [String]$resultsStorageAccountRg = 'MgcTestHarness',
+    [String]$resultsStorageAccountName = 'testharness', # where the results from performance counters are saved
+    [String]$resultsStorageAccountRg = 'TestHarness',
     [String]$resultsContainerName = 'stacktestresults', # the container for uploading the results of the performance test
+	[String]$keyVaultName = 'TestVault'+([System.Guid]::NewGuid().ToString().Replace('-', '').substring(0, 8)),
     
     [String]$artifactsContainerName = 'artifacts',  # the container for uploading the published DSC configuration
     [Int32]$pauseBetweenVmCreateInSeconds = 0,
-    [Int32]$totalVmCount = 10,
-    [String]$storageKey,  # the storage key for the results storage account
+    [Int32]$totalVmCount = 5,
     [System.IO.FileInfo]$diskSpd = ".\DiskSpd-2.0.20a.zip",
     
-    [String]$vmAdminUsername = 'mcowen',
 
 	[ValidateLength(3,20)]
 	[String]$vmNamePrefix = 'testvm', # DO NOT USE CHARS SUCH AS HYPHENS
 	[String]$vmsize = 'Standard_D2s_v3',   # the size of VM
     [String]$armTemplateFilePath = '.\windowsvirtualmachine.json',
     [String]$armTemplateParamsFilePath = '.\windowsvirtualmachine.parameters.json',
-	[String]$diskSpdDownloadUrl = "https://gallery.technet.microsoft.com/DiskSpd-A-Robust-Storage-6ef84e62/file/199535/1/DiskSpd-2.0.20a.zip",
     [String]$testParams = '-c200M -t2 -o20 -d30 -w50 -Rxml',     # the parameters for DiskSpd
-    [String]$dscPath = 'C:\dev\mod\StackTesting\StackTesting\DSC\DiskPrepTest.ps1',     # the path to the DSC configuration to run on the VMs
+    [String]$dscPath = '.\DSC\DiskPrepTest.ps1',     # the path to the DSC configuration to run on the VMs
     [String]$storageUrlDomain = 'blob.core.windows.net',
 	[Int32]$dataDiskSizeGb = 1024,
     [switch]$dontDeleteResourceGroupOnComplete,
-	[switch]$publishDscBeforeStarting,
-	[switch]$deployArmTemplate # needed for initial deployment to create vnet or if you need to upload artifacts
+	[switch]$dontPublishDscBeforeStarting,
+	[switch]$initialise # needed for initial deployment to create vnet
 
 )
 
 
+Enable-AzureRmContextAutosave
 
-if($deployArmTemplate){
+$vnetName = 'TestVnet'  # the name of the vnet to add the VMs to (must match what is set in the ARM template)
+
+if(-not (Test-Path $dscPath)){
+	Write-Host "Can't find necessary files. Are you at the right location?"
+	exit
+}
+
+if($initialise){
 
     Get-AzureRMResourceGroup -Name $resultsStorageAccountRg -ErrorVariable resultsRgNotPresent -ErrorAction SilentlyContinue
 	if($resultsRgNotPresent){
+		Write-Host "Creating resources to receive test results/output"
+		Write-Host "- creating resource group"
 		New-AzureRmResourceGroup -Name $resultsStorageAccountRg -Location $location
 		
+		Write-Host "- creating storage account"
         $resultsStdStore = New-AzureRmStorageAccount -ResourceGroupName $resultsStorageAccountRg -Name $resultsStorageAccountName `
           -Location $location -Type Standard_LRS -ErrorAction SilentlyContinue
 		
+		Write-Host "- creating containers"
 		New-AzureStorageContainer -Name $resultsContainerName -Context $resultsStdStore.Context -ErrorAction SilentlyContinue
 		New-AzureStorageContainer -Name $artifactsContainerName -Context $resultsStdStore.Context -ErrorAction SilentlyContinue
+
+		# upload DiskSpd-2.0.20a.zip to artifacts
+		Write-Host "- uploading diskspd archive"
+		Set-AzureStorageBlobContent -File $diskSpd -Blob 'DiskSpd-2.0.20a.zip' -Container $artifactsContainerName -Context $resultsStdStore.Context -Force
+	    
+		Write-Host "- creating key vault"
+		New-AzureRmKeyVault -VaultName $keyVaultName -ResourceGroupName $resultsStorageAccountRg -Location $location 
+
+		Write-Host "- adding secrets"
+		$accKey = Get-AzureRmStorageAccountKey -ResourceGroupName $resultsStorageAccountRg -AccountName $resultsStorageAccountName
+
+		Set-AzureKeyVaultSecret -VaultName $keyVaultName -Name 'password' -SecretValue $cred.Password
+		Set-AzureKeyVaultSecret -VaultName $keyVaultName -Name 'storageKey' -SecretValue (ConvertTo-SecureString $accKey.Value[0] -AsPlainText -Force)
+		
+		Write-Host "Resources ready for test output"
+
 	}
 
-	# deploy the vnet and the first vm(s)
-	.\Deploy-AzureResourceGroup.ps1 -StorageAccountName $resultsStorageAccountName -StorageContainerName $artifactsContainerName `
-		-ResourceGroupName $baseResourceGroup -ResourceGroupLocation $location `
-		-TemplateFile $armTemplateFilePath `
-		-TemplateParametersFile $armTemplateParamsFilePath `
-		-ArtifactStagingDirectory '.' -DSCSourceFolder '.\DSC' -UploadArtifacts
-
+	
+	Write-Host "Creating Virtual Network"
+	$frontendSubnet = New-AzureRmVirtualNetworkSubnetConfig -Name 'Subnet' -AddressPrefix "10.0.1.0/24"
+	New-AzureRmVirtualNetwork -Name $vnetName -ResourceGroupName $resultsStorageAccountRg -Location $location -AddressPrefix "10.0.0.0/16" -Subnet $frontendSubnet -Force -Confirm:$false
+	
 }
 
 
-Enable-AzureRmContextAutosave
 
-if($publishDscBeforeStarting){
+
+if(-not $dontPublishDscBeforeStarting){
+	Write-Host "Publishing DSC"
 	# we need to publish the dsc to the root of the container
 	Publish-AzureRmVMDscConfiguration -ConfigurationPath $dscPath -ResourceGroupName $resultsStorageAccountRg `
 		-StorageAccountName $resultsStorageAccountName -ContainerName $artifactsContainerName -Force -Verbose
 }
 
+$root = Get-Location # todo: check we are in the right location
+$resultsStorage = Get-AzureRmStorageAccount -ResourceGroupName $resultsStorageAccountRg -Name $resultsStorageAccountName
+$storageKey = (Get-AzureRmStorageAccountKey -ResourceGroupName $resultsStorageAccountRg -AccountName $resultsStorageAccountName).Value[0] +''
+
+$diskSpdDownloadUrl = New-AzureStorageBlobSASToken -Blob 'DiskSpd-2.0.20a.zip' -Container $artifactsContainerName -FullUri -Context $resultsStorage.Context -Permission r -ExpiryTime (Get-Date).AddHours(4)
+
 
 for ($x = 1; $x -le $totalVmCount; $x++)
 {
-    Write-Host "Starting $x"
+    Write-Host "Starting creation of vm $x"
 
     $resourceGroup = $resourceGroupNamePrefix + $x    
-    
-	$vnetName = 'TestVnet'        # the name of the vnet to add the VMs to (must match what is set in the ARM template)
 
     $params = @(
         $resourceGroup
-        $baseResourceGroup
+		$root
         $storageKey
 		$vmNamePrefix
         $vmsize
@@ -108,6 +134,7 @@ for ($x = 1; $x -le $totalVmCount; $x++)
         $location
 		$diskSpdDownloadUrl
 		$testParams
+		$resultsStorage
         $resultsStorageAccountRg
 		$resultsStorageAccountName
 		$resultsContainerName
@@ -120,7 +147,7 @@ for ($x = 1; $x -le $totalVmCount; $x++)
     $job = Start-Job -ScriptBlock { 
         param(
             $resourceGroup,
-            $baseResourceGroup,
+			$root,
             $storageKey,
 			$vmNamePrefix,
             $vmsize,
@@ -131,6 +158,7 @@ for ($x = 1; $x -le $totalVmCount; $x++)
             $location,
 			$diskSpdDownloadUrl,
 			$testParams,
+			$resultsStorage,
             $resultsStorageAccountRg,
 			$resultsStorageAccountName,
 			$resultsContainerName,
@@ -144,9 +172,9 @@ for ($x = 1; $x -le $totalVmCount; $x++)
         $sw = [Diagnostics.Stopwatch]::StartNew()
         $log = "c:\logs\$vmName.log"
 		New-Item -ItemType Directory -Force -Path c:\logs
-        Add-content $log "starting,$(Get-Date -Format 'yyyy-M-d HH:mm:ss')"
+		Add-content $log "starting,$(Get-Date -Format 'yyyy-M-d HH:mm:ss')"
+		Set-Location -Path $root -PassThru | Out-File -FilePath $log -Append
         
-        $resultsStorage = Get-AzureRmStorageAccount -Name $resultsStorageAccountName -ResourceGroupName $resultsStorageAccountRg
 
         Get-AzureRMResourceGroup -Name $resourceGroup -ErrorVariable notPresent -ErrorAction SilentlyContinue
 
@@ -173,12 +201,12 @@ for ($x = 1; $x -le $totalVmCount; $x++)
 
         Add-content $log "building refs,$($sw.Elapsed.ToString())"
 
-        $Vnet = Get-AzureRmVirtualNetwork -Name $vnetName -ResourceGroupName $baseResourceGroup
+        $Vnet = Get-AzureRmVirtualNetwork -Name $vnetName -ResourceGroupName $resultsStorageAccountRg
         $SingleSubnet = Get-AzureRmVirtualNetworkSubnetConfig -Name 'Subnet' -VirtualNetwork $Vnet
         $NIC
         $nicCreateCount = 4
         do{
-            # seeing a RetryableError with this cmdlet so retry
+            # seeing a RetryableError with this cmdlet on 1807 of Azure Stack cmdlets so putting a retry in here
             $NIC = New-AzureRmNetworkInterface -Name "nic1" -ResourceGroupName $resourceGroup -Location $location -SubnetId $Vnet.Subnets[0].Id -Force -ErrorAction SilentlyContinue -ErrorVariable nicCreateError
             $nicCreateCount -= 1
             
@@ -228,10 +256,13 @@ for ($x = 1; $x -le $totalVmCount; $x++)
             $dscResult = Set-AzureRmVMDscExtension -Name Microsoft.Powershell.DSC -ArchiveBlobName 'DiskPrepTest.ps1.zip' `
                 -ArchiveStorageAccountName $resultsStorageAccountName -ArchiveContainerName "$artifactsContainerName" `
                 -ArchiveResourceGroupName $resultsStorageAccountRg -ResourceGroupName $resourceGroup -Version 2.19 -VMName $vmName `
-                -ConfigurationArgument $dscConfigParams -ConfigurationName DiskPrepAndTest -ErrorVariable dscOutput -Verbose
+                -ConfigurationArgument $dscConfigParams -ConfigurationName DiskPrepAndTest -ErrorVariable dscErrorOutput -OutVariable dscOutput -Verbose
             
-            if($dscOutput){
-                Add-content $log "dsc result,$dscOutput"
+            if($dscErrorOutput){
+                Add-content $log "dsc result,$dscErrorOutput"
+            }
+			if($dscOutput){
+                Add-content $log $dscOutput
             }
             
             Add-content $log "waiting for blob,$($sw.Elapsed.ToString())"

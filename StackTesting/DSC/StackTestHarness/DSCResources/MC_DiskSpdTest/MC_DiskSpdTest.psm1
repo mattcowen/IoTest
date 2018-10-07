@@ -93,7 +93,7 @@ function Set-TargetResource
 		$cmd = "$diskSpdPath $DiskSpdParameters $iopsTestFilePath"
 		iex $cmd -ErrorAction SilentlyContinue -ErrorVariable diskSpdError -OutVariable diskspdOut
 
-		Add-Content -Path $testHarnessfile -Value "DiskSpdResults:`n$diskspdOut"
+		Add-Content -Path $testHarnessfile -Encoding UTF8 -Value "DiskSpdResults:`n$diskspdOut"
 
 		# upload iops test file to test the network
 		$endpoint = "$($UploadUrlWithSas.Split('?')[0])/$("$TestName.dat")?$($UploadUrlWithSas.Split('?')[1])"

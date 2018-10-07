@@ -26,9 +26,6 @@
     <None Include="Deployment.targets">
       <Visible>False</Visible>
     </None>
-    <Content Include="Deploy-AzureResourceGroup.ps1" />
-    <Content Include="WindowsVirtualMachine.json" />
-    <Content Include="WindowsVirtualMachine.parameters.json" />
     <Content Include="DSC\DiskPrepTest.ps1" />
     <Content Include="DiskSpd-2.0.20a.zip" />
     <None Include="DSC\ComputerManagementDsc.zip" />
@@ -37,7 +34,7 @@
     <None Include="DSC\StackTestHarness\DSCResources\MC_DiskSpdTest\MC_DiskSpdTest.psm1" />
     <None Include="DSC\StackTestHarness\DSCResources\MC_DiskSpdTest\MC_DiskSpdTest.schema.mof" />
     <None Include="DSC\xPendingReboot.zip" />
-    <None Include="ParallelRamp.ps1" />
+    <None Include="Init.ps1" />
     <None Include="RampTest.ps1" />
     <None Include="Run.ps1" />
     <None Include="Scripts\stack-signin.ps1" />
