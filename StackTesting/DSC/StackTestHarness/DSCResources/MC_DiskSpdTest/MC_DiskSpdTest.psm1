@@ -91,7 +91,7 @@ function Set-TargetResource
 
 		# run the diskspd test and output to a file
 		$cmd = "$diskSpdPath $DiskSpdParameters $iopsTestFilePath"
-		iex $cmd -ErrorAction SilentlyContinue -ErrorVariable diskSpdError -OutVariable diskspdOut
+		iex $cmd -ErrorAction SilentlyContinue -ErrorVariable diskSpdError -OutVariable diskspdOut -WarningAction SilentlyContinue *>&1
 
 		Add-Content -Path $testHarnessfile -Encoding UTF8 -Value "DiskSpdResults:`n$diskspdOut"
 

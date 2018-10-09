@@ -1,10 +1,10 @@
 
 param (
-    [string]$StackDomain,
+    [string]$StackDomain = 'mas2.mtc-tvp.com',
 
     [switch]$Admin,
 
-    [string]$ScriptPaths = "C:\Azure\AzureStack-Tools-Master"
+    [string]$ScriptPaths = "C:\dev\AzureStack-Tools"
 )
 
 # Are we creating an Admin session or user session

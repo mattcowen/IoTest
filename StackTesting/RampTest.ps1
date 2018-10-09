@@ -4,15 +4,6 @@ Matt Cowen, August 2018
 Creates virtual machines in parallel each in their own resource group and runs performance tests
 outputting the results to blob storage. It then deletes each resource group once the test is complete.
 
-Steps
-
-1. You need to create a few resources: a key vault, storage account
-2. Add the storage key to key vault "storageKey" secret. Pass in the $storageKey value below too.
-3. Add "password" secret to key vault for vm admin credentials (username can be set below)
-4. Upload DiskSpd zip to the artifacts container in the results storage account and update download url below
-5. Ensure artifacts container is publically accessible
-
-
 #>
 
 
@@ -47,16 +38,16 @@ param
 	[switch]$initialise # needed for initial deployment to create vnet
 
 )
-
-
-Enable-AzureRmContextAutosave
-
-$vnetName = 'TestVnet'  # the name of the vnet to add the VMs to (must match what is set in the ARM template)
+Write-Host "Started at $(Get-Date -Format 'HH:mm:ss')"
 
 if(-not (Test-Path $dscPath)){
 	Write-Host "Can't find necessary files. Are you at the right location?"
 	exit
 }
+
+Enable-AzureRmContextAutosave
+
+$vnetName = 'TestVnet'  # the name of the vnet to add the VMs to (must match what is set in the ARM template)
 
 if($initialise){
 
@@ -108,7 +99,7 @@ if(-not $dontPublishDscBeforeStarting){
 		-StorageAccountName $resultsStorageAccountName -ContainerName $artifactsContainerName -Force -Verbose
 }
 
-$root = Get-Location # todo: check we are in the right location
+$root = Get-Location
 $resultsStorage = Get-AzureRmStorageAccount -ResourceGroupName $resultsStorageAccountRg -Name $resultsStorageAccountName
 $storageKey = (Get-AzureRmStorageAccountKey -ResourceGroupName $resultsStorageAccountRg -AccountName $resultsStorageAccountName).Value[0] +''
 
