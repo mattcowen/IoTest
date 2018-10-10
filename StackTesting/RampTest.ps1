@@ -164,7 +164,7 @@ for ($x = 1; $x -le $totalVmCount; $x++)
         $log = "c:\logs\$vmName.log"
 		New-Item -ItemType Directory -Force -Path c:\logs
 		Add-content $log "starting,$(Get-Date -Format 'yyyy-M-d HH:mm:ss')"
-		Set-Location -Path $root -PassThru | Out-File -FilePath $log -Append
+		Set-Location -Path $root -PassThru | Out-File -FilePath $log -Append -Encoding utf8
         
 
         Get-AzureRMResourceGroup -Name $resourceGroup -ErrorVariable notPresent -ErrorAction SilentlyContinue
