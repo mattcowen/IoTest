@@ -1,6 +1,6 @@
 
 param (
-    [string]$StackDomain = 'mas2.mtc-tvp.com',
+    [string]$StackDomain,
 
     [switch]$Admin,
 

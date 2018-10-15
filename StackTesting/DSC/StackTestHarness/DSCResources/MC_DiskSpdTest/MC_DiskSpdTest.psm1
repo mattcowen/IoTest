@@ -101,6 +101,7 @@ function Set-TargetResource
 		Write-Verbose "$endpoint"
 		$headers = @{
 			"x-ms-blob-type"="BlockBlob"
+            "x-ms-version"='2016-05-31'
 			"Content-Length"=(Get-Item $iopsTestFilePath).length
 		}
 		
@@ -113,6 +114,7 @@ function Set-TargetResource
 		}
 		else{
 			# download the file we just uploaded to continue test of the network
+        
 			Write-Verbose "Downloading file $endpoint"
 			$wc = New-Object System.Net.WebClient
 			$wc.Headers["User-Agent"] = "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.2; .NET CLR 1.0.3705;)"
@@ -195,7 +197,7 @@ function upload-to-blob-storage(
 
 	$date = [System.DateTime]::UtcNow.ToString("R")
 
-	$stringToSign = "PUT`n`n`n$fileLength`n`n`n`n`n`n`n`n`nx-ms-blob-type:BlockBlob`nx-ms-date:$date`nx-ms-version:2015-04-05`n/$StorageAccount/$containerName/$($file.Name)"
+	$stringToSign = "PUT`n`n`n$fileLength`n`n`n`n`n`n`n`n`nx-ms-blob-type:BlockBlob`nx-ms-date:$date`nx-ms-version:2016-05-31`n/$StorageAccount/$containerName/$($file.Name)"
 	Write-Verbose "String to sign: $stringToSign"
 
 	$sharedKey = [System.Convert]::FromBase64String($Key)
@@ -209,7 +211,7 @@ function upload-to-blob-storage(
 	$headers = @{
 		"Authorization"=$authHeader
 		"x-ms-date"=$date
-		"x-ms-version"="2015-04-05" # this is old but needs to be currently for Stack
+		"x-ms-version"="2016-05-31" 
 		"x-ms-blob-type"="BlockBlob"
 	}
 	$url = "https://$StorageAccount.$storageUrlDomain/$containerName/$($file.Name)"
