@@ -10,7 +10,7 @@ outputting the results to blob storage. It then deletes each resource group once
 
 param
 (
-    [PSCredential]$cred,
+	[Parameter(Mandatory=$true)][ValidateNotNullOrEmpty()][PSCredential]$cred,
 	[String]$resourceGroupNamePrefix = 'sta-',
     [String]$location = 'northeurope',    
     [String]$resultsStorageAccountName = 'testharness', # where the results from performance counters are saved
@@ -101,6 +101,8 @@ if(-not $dontPublishDscBeforeStarting){
 
 $root = Get-Location
 $resultsStorage = Get-AzureRmStorageAccount -ResourceGroupName $resultsStorageAccountRg -Name $resultsStorageAccountName
+New-AzureStorageContainer -Name $resultsContainerName -Context $resultsStorage.Context -ErrorAction SilentlyContinue
+
 $storageKey = (Get-AzureRmStorageAccountKey -ResourceGroupName $resultsStorageAccountRg -AccountName $resultsStorageAccountName).Value[0] +''
 
 $diskSpdDownloadUrl = New-AzureStorageBlobSASToken -Blob 'DiskSpd-2.0.20a.zip' -Container $artifactsContainerName -FullUri -Context $resultsStorage.Context -Permission r -ExpiryTime (Get-Date).AddHours(4)
@@ -125,7 +127,6 @@ for ($x = 1; $x -le $totalVmCount; $x++)
         $location
 		$diskSpdDownloadUrl
 		$testParams
-		$resultsStorage
         $resultsStorageAccountRg
 		$resultsStorageAccountName
 		$resultsContainerName
@@ -149,7 +150,6 @@ for ($x = 1; $x -le $totalVmCount; $x++)
             $location,
 			$diskSpdDownloadUrl,
 			$testParams,
-			$resultsStorage,
             $resultsStorageAccountRg,
 			$resultsStorageAccountName,
 			$resultsContainerName,
@@ -164,7 +164,7 @@ for ($x = 1; $x -le $totalVmCount; $x++)
         $log = "c:\logs\$vmName.log"
 		New-Item -ItemType Directory -Force -Path c:\logs
 		Add-content $log "starting,$(Get-Date -Format 'yyyy-M-d HH:mm:ss')"
-		Set-Location -Path $root -PassThru | Out-File -FilePath $log -Append
+		Set-Location -Path $root -PassThru | Out-File -FilePath $log -Append -Encoding utf8
         
 
         Get-AzureRMResourceGroup -Name $resourceGroup -ErrorVariable notPresent -ErrorAction SilentlyContinue
@@ -206,7 +206,7 @@ for ($x = 1; $x -le $totalVmCount; $x++)
 			}
 			Start-Sleep -Seconds 2
         }
-        while($nicCreateError -or $nicCreateCount -eq 0)
+        while($nicCreateError -or $nicCreateCount -le 0)
         
         Add-content $log "creating vm, $($sw.Elapsed.ToString())"
 
@@ -257,9 +257,11 @@ for ($x = 1; $x -le $totalVmCount; $x++)
             }
             
             Add-content $log "waiting for blob,$($sw.Elapsed.ToString())"
+            $resultsStorage = Get-AzureRmStorageAccount -ResourceGroupName $resultsStorageAccountRg -Name $resultsStorageAccountName
 
             $c = 6 
             Do{
+
                 Get-AzureStorageBlob -Blob "perfctr-$testName-$vmName.blg" -Container $resultsContainerName `
                     -Context $resultsStorage.Context -ErrorAction SilentlyContinue -ErrorVariable blob1NotPresent
 				
