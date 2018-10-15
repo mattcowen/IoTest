@@ -6,8 +6,6 @@ outputting the results to blob storage. It then deletes each resource group once
 
 #>
 
-
-
 param
 (
 	[Parameter(Mandatory=$true)][ValidateNotNullOrEmpty()][PSCredential]$cred,
